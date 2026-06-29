@@ -1,0 +1,60 @@
+name: Starter task
+description: Publish a scoped contributor-friendly task.
+title: "[Starter]: "
+labels:
+  - good first issue
+  - help wanted
+body:
+  - type: textarea
+    id: context
+    attributes:
+      label: Context
+      description: Why does this help KnowMesh become more reliable, traceable, maintainable, or integrable?
+    validations:
+      required: true
+  - type: textarea
+    id: scope
+    attributes:
+      label: Scope
+      description: List the files, docs, examples, tests, or behavior that should change.
+      placeholder: |
+        - Update ...
+        - Add ...
+        - Keep ...
+    validations:
+      required: true
+  - type: textarea
+    id: non_scope
+    attributes:
+      label: Non-scope
+      description: Explicitly list what should not be changed.
+      placeholder: |
+        - Do not add cloud credentials.
+        - Do not include private documents or textbook content.
+        - Do not change docs/current-design.md.
+    validations:
+      required: true
+  - type: textarea
+    id: acceptance
+    attributes:
+      label: Acceptance checks
+      description: Commands or review checks that prove the task is complete.
+      placeholder: |
+        - git diff --check
+        - npm run verify:package-boundary
+    validations:
+      required: true
+  - type: dropdown
+    id: area
+    attributes:
+      label: Area
+      options:
+        - Documentation
+        - Examples
+        - Tests
+        - Web Console
+        - Provider Layer
+        - K12 Expert
+        - Platform / Launcher
+    validations:
+      required: true

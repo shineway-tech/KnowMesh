@@ -1,40 +1,119 @@
 # Contributing to KnowMesh
 
-KnowMesh is being built as a local-first knowledge-base builder for auditable RAG, traceable citations, and maintainable document intelligence.
+KnowMesh is a local-first Knowledge Asset Compiler for auditable RAG, traceable citations, and maintainable document intelligence.
 
-## Development principles
+This project is still alpha, but the architecture direction is intentional. Contributions are welcome when they make knowledge assets more reliable, traceable, maintainable, or easier to integrate.
 
-KnowMesh should move toward the complete product experience without keeping unnecessary intermediate code or documents. Keep the repository lean: delete unused code, stale docs, dead examples, and abandoned configuration instead of leaving them around as references.
+## Start Here
 
-See `docs/current-design.md` for the current product, architecture, data,
-quality, UX, and development discipline.
+- Product and architecture authority: [docs/current-design.md](docs/current-design.md)
+- Roadmap: [ROADMAP.md](ROADMAP.md) / [ROADMAP.en.md](ROADMAP.en.md)
+- Code navigation: [docs/project-map.zh-CN.md](docs/project-map.zh-CN.md) / [docs/project-map.en.md](docs/project-map.en.md)
+- Starter tasks: [docs/good-first-issues.zh-CN.md](docs/good-first-issues.zh-CN.md) / [docs/good-first-issues.en.md](docs/good-first-issues.en.md)
+- Security reporting: [SECURITY.md](SECURITY.md)
 
-One document type should have one current document. When a new version of a plan,
-product description, feature guide, or configuration guide replaces the old one,
-migrate useful information into `docs/current-design.md` and delete the old file.
+`docs/current-design.md` is the single current design authority. Do not create a second product blueprint, data standard, or long-term design document.
 
-## Local checks
+## Good Contribution Shapes
+
+- Documentation clarity: README, Getting Started, Roadmap, Project Map, examples, or translation fixes.
+- Local-only examples: improve `examples/local-demo/` without credentials, uploads, OCR, embeddings, or vector writes.
+- Focused tests: add coverage for existing behavior without changing product direction.
+- Web Console clarity: empty states, labels, copy, or accessibility improvements that match current UX rules.
+- Provider research: capability notes or adapter boundaries without real secrets.
+- Expert docs: K12 structure, evaluation, or query routing explanations without textbook content.
+
+Avoid broad rewrites unless the issue or design authority explicitly calls for them.
+
+## Development Setup
+
+Requirements:
+
+- Node.js 24 or newer.
+- Windows, macOS, or Linux.
+- Optional local tools such as Ghostscript or LibreOffice only when a task explicitly needs them.
+
+Install and run local checks:
 
 ```bash
 npm install
+npm run doctor
+npm run demo:plan
 npm test
 npm run smoke:release
 npm run smoke:artifact
 npm run verify:package-boundary
-npm run doctor
-npm run demo:plan
 ```
 
-## Safety rules
+The default local demo checks do not upload files, call OCR, call embedding, or write vector indexes.
 
-- Do not commit `.env`, workspace artifacts, model outputs, private documents, or generated secrets.
-- Do not add code that uploads, deletes, calls OCR, calls embedding, or writes to vector indexes without an explicit execution gate.
-- Keep local planning paths usable without cloud credentials.
-- Preserve `sourceParts` whenever split files such as `.pdf.1` and `.pdf.2` are grouped into one logical document.
+## Development Discipline
 
-## Data model expectations
+- Start from a knowledge base, not global loose state.
+- Keep `workspace.sqlite` and per-KB `catalog.sqlite` as the mutable runtime truth.
+- Keep JSON/JSONL as export, audit, sidecar, or report formats, not primary state.
+- Delete replaced code, stale docs, dead examples, and abandoned configuration.
+- Do not keep compatibility shims for old JSON-first flows unless `docs/current-design.md` explicitly says so.
+- Keep Core domain-neutral; K12 and future industries belong in Expert boundaries.
+- Preserve explicit execution gates before uploads, deletes, OCR calls, embedding calls, or vector writes.
+
+## Safety Rules
+
+Never commit:
+
+- `.env` files or secrets;
+- SQLite databases or WAL/SHM files;
+- workspace, knowledge-base, artifact, log, output, or test-result directories;
+- source document text, textbook content, OCR outputs, model outputs, or private local paths.
+
+Public issues and PRs should not include vulnerability details, credentials, private documents, generated artifacts, logs with local paths, or screenshots containing sensitive data.
+
+## Data Model Expectations
 
 - Every logical document needs a stable `document_id`.
 - Every content version needs a distinct `version_id`.
-- New versions should be proposed first, then activated through an active manifest.
+- New versions should be proposed first, validated, published, then activated.
 - OCR failures must be recorded rather than silently dropped.
+- Query answers must cite source documents, pages, or structure anchors when they claim support.
+
+## Pull Request Checklist
+
+Before opening a PR:
+
+- Link the issue or explain the user-facing problem.
+- State which layer is affected: Platform, Web Console, Core, Knowledge Asset Layer, Expert, or Provider.
+- Explain whether `workspace.sqlite`, `catalog.sqlite`, credentials, local files, cloud operations, or generated artifacts are affected.
+- Keep Chinese and English docs in sync when changing public docs.
+- Run the narrowest relevant test first, then broader checks when shared behavior or release assets are touched.
+
+Recommended verification:
+
+```bash
+npm test
+npm run smoke:release
+npm run smoke:artifact
+npm run verify:package-boundary
+```
+
+For docs-only changes, at minimum run:
+
+```bash
+git diff --check
+npm run verify:package-boundary
+```
+
+## Issue Labels
+
+Useful labels include:
+
+- `good first issue`
+- `help wanted`
+- `area:docs`
+- `area:examples`
+- `area:tests`
+- `area:web-console`
+- `area:provider`
+- `area:expert-k12`
+- `area:platform`
+
+Starter issues should include context, scope, non-scope, acceptance checks, and safety notes.

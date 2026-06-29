@@ -137,6 +137,8 @@ Near-term priorities:
 - Better local parser / OCR provider adapters.
 - OpenAPI-ready integration contract.
 
+See [ROADMAP.en.md](ROADMAP.en.md) for the fuller roadmap.
+
 ## Who It Is For
 
 | Audience | Why They May Care |
@@ -181,6 +183,9 @@ src/web-console/          Local Web Console
 - [Documentation Center](docs/README.en.md)
 - [Getting Started](docs/getting-started.en.md)
 - [Architecture Overview](docs/architecture.en.md)
+- [Roadmap](ROADMAP.en.md)
+- [Project Map](docs/project-map.en.md)
+- [Good First Issues](docs/good-first-issues.en.md)
 - [Current Design](docs/current-design.md)
 - [Operations Runbook](docs/phase1-6-operations-runbook.md)
 - [Changelog](CHANGELOG.md)
