@@ -2,7 +2,9 @@
 
 [English](README.en.md) | [项目首页](../README.md) | [Current Design](current-design.md)
 
-KnowMesh 的文档分为两类：
+KnowMesh 的公开定位是本地优先的 Knowledge Asset Compiler：把真实文档文件夹编译成可审计、可追溯、可维护、可集成的知识资产。K12 是第一个主要 Expert 场景，而不是项目的全部边界。
+
+文档分为两类：
 
 - 面向用户和贡献者的入口文档：快速入门、架构概览、示例、运维说明。
 - 当前设计权威：`docs/current-design.md`。产品、架构、数据、质量、UX 和开发纪律以它为准。

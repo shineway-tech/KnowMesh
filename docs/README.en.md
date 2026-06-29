@@ -2,6 +2,8 @@
 
 [中文](README.md) | [Project Home](../README.en.md) | [Current Design](current-design.md)
 
+KnowMesh is positioned as a local-first Knowledge Asset Compiler: it compiles real document folders into auditable, traceable, maintainable, and integrable knowledge assets. K12 is the first major Expert scenario, not the full boundary of the project.
+
 KnowMesh documentation has two purposes:
 
 - Entry-point docs for users and contributors: getting started, architecture, examples, and operations.

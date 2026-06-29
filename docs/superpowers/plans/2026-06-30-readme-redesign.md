@@ -141,7 +141,7 @@ If architecture docs reference visuals, they must point to the simplified README
 
 - [ ] **Step 1: Remove unused README visual assets if replaced**
 
-If `hero.png` and `k12-expert.png` are no longer referenced, remove them. Keep social preview assets unless they are explicitly replaced.
+Remove the superseded README PNG assets after the SVG replacements are referenced. Keep social preview assets unless they are explicitly replaced.
 
 - [ ] **Step 2: Validate SVG XML**
 

@@ -178,10 +178,10 @@ Requirements:
 
 Recommended assets:
 
-- `assets/readme/hero.png` or `hero.svg`: first impression, source folder to knowledge asset, non-decorative.
+- `assets/readme/hero.svg`: first impression, source folder to knowledge asset, non-decorative.
 - `assets/readme/architecture.svg`: simplified five-stage workflow diagram.
 - `assets/readme/storage-truth.svg`: optional docs-level diagram for workspace.sqlite, catalog.sqlite, artifacts, sidecars.
-- `assets/readme/k12-expert.png` or `k12-expert.svg`: scenario proof for K12 Expert.
+- `assets/readme/k12-expert.svg`: scenario proof for K12 Expert.
 - `assets/social/knowmesh-social-preview.png`: should match the new hero narrative.
 
 The README should not rely on fake product screenshots unless the screenshot reflects real working UI.

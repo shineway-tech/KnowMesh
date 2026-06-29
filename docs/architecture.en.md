@@ -4,7 +4,7 @@
 
 > This is an architecture entry point, not a second design authority. The complete product, data, quality, UX, and development contract lives in `docs/current-design.md`.
 
-KnowMesh turns source materials into trusted, inspectable, maintainable, and integrable knowledge assets. It is not an OCR tool, vector database UI, or local chatbot demo.
+KnowMesh is a local-first Knowledge Asset Compiler: it turns source materials into trusted, inspectable, maintainable, and integrable knowledge assets. It is not an OCR tool, vector database UI, or local chatbot demo.
 
 ![KnowMesh architecture](../assets/readme/architecture.svg)
 

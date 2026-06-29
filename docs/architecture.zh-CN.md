@@ -4,7 +4,7 @@
 
 > 本文是架构入口，不是新的设计权威。完整产品、数据和开发纪律以 `docs/current-design.md` 为准。
 
-KnowMesh 的核心目标是把源资料编译成可信、可检查、可维护、可集成的知识资产。它不是 OCR 工具、向量库 UI 或本地聊天 demo。
+KnowMesh 的核心目标是做本地优先的 Knowledge Asset Compiler：把源资料编译成可信、可检查、可维护、可集成的知识资产。它不是 OCR 工具、向量库 UI 或本地聊天 demo。
 
 ![KnowMesh architecture](../assets/readme/architecture.svg)
 
