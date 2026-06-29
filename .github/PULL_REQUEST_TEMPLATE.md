@@ -6,6 +6,7 @@
 
 - [ ] `npm test`
 - [ ] `npm run smoke:release`
+- [ ] `npm run smoke:artifact`
 - [ ] `npm run verify:package-boundary`
 
 ## Safety Checklist

@@ -44,5 +44,8 @@ jobs:
       - name: Run release smoke
         run: npm run smoke:release
 
+      - name: Verify release artifact install
+        run: npm run smoke:artifact
+
       - name: Verify package boundary
         run: npm run verify:package-boundary

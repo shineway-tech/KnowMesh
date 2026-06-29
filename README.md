@@ -133,6 +133,7 @@ KnowMesh is local-first and confirmation-gated:
 ```bash
 npm test
 npm run smoke:release
+npm run smoke:artifact
 npm run verify:package-boundary
 npm run doctor
 npm run demo:plan

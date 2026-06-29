@@ -18,7 +18,7 @@ Current scope:
 - Aliyun OSS Vector plus OSS Sidecar metadata contract.
 - Node.js 24 baseline with Node-independent launchers for Windows, macOS, and
   Linux.
-- Release smoke, package-boundary verification, and GitHub Actions CI on
-  ubuntu-latest and windows-latest.
+- Release smoke, release-artifact install smoke, package-boundary verification,
+  and GitHub Actions CI on ubuntu-latest and windows-latest.
 
 This version is still pre-publication and is being prepared for GitHub open source release.

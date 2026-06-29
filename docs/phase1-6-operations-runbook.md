@@ -152,6 +152,16 @@ Preview the package boundary without writing a tarball:
 npm pack --dry-run --json
 ```
 
+Verify the actual tarball as a consumer would install it:
+
+```bash
+npm run smoke:artifact
+```
+
+This command packs KnowMesh, installs the tarball in a clean temporary npm
+project, checks the installed CLI help path, and rejects private runtime state
+inside the installed package.
+
 Create a release tarball in a temporary directory and record its checksum:
 
 ```bash
@@ -221,6 +231,12 @@ root:
 
 ```bash
 npm run smoke:release
+```
+
+Run release-artifact smoke against a clean temporary consumer project:
+
+```bash
+npm run smoke:artifact
 ```
 
 Run targeted checks for the architecture and packaging foundation:
