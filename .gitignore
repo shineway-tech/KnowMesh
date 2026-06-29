@@ -5,6 +5,7 @@ node_modules/
 .agents/
 .codex/
 .codex-plans/
+.superpowers/
 .runtime/
 source/
 workspace/
