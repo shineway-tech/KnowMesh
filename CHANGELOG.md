@@ -2,6 +2,13 @@
 
 All notable user-facing changes are recorded here with numeric versions.
 
+## Unreleased
+
+- Added CodeQL and OpenSSF Scorecard workflows for public repository security
+  and supply-chain visibility.
+- Updated public README status notes to reflect enabled security gates and branch
+  protection.
+
 ## 0.1.0
 
 Initial local-first KnowMesh release line.

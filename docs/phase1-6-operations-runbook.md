@@ -202,21 +202,19 @@ Optional dependencies:
 Current configured gates:
 
 - CI runs on `ubuntu-latest` and `windows-latest` with Node.js 24.
+- CodeQL runs JavaScript/TypeScript analysis on push, pull request, weekly
+  schedule, and manual dispatch.
+- OpenSSF Scorecard runs on push, branch-protection changes, weekly schedule,
+  and manual dispatch, then uploads SARIF results.
 - Dependabot is enabled for npm packages and GitHub Actions.
 - Issues and Discussions are enabled for public support; Wiki is disabled.
+- Secret scanning, push protection, Dependabot security updates, and private
+  vulnerability reporting are enabled.
+- `main` is protected with required Ubuntu and Windows CI checks, one approving
+  review, stale-review dismissal, required conversation resolution, and no force
+  push or branch deletion.
 - Squash merge is enabled, merge commits are disabled, and branches are deleted
   after merge.
-
-Gates that must be enabled once GitHub allows them for the repository:
-
-- Protect `main` with required CI checks before merge.
-- Enable secret scanning and push protection.
-- Enable private vulnerability reporting, then update `SECURITY.md` and issue
-  template contact links to point directly to that private channel.
-
-On a free private repository, GitHub can reject these repository-protection and
-security APIs. Treat that as a hosting limitation, not as an accepted release
-posture after the project becomes public.
 
 ## Local Verification
 

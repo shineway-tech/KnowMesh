@@ -7,6 +7,8 @@
 ![KnowMesh hero](assets/readme/hero.png)
 
 [![CI](https://github.com/shineway-tech/KnowMesh/actions/workflows/ci.yml/badge.svg)](https://github.com/shineway-tech/KnowMesh/actions/workflows/ci.yml)
+[![CodeQL](https://github.com/shineway-tech/KnowMesh/actions/workflows/codeql.yml/badge.svg)](https://github.com/shineway-tech/KnowMesh/actions/workflows/codeql.yml)
+[![Scorecard](https://github.com/shineway-tech/KnowMesh/actions/workflows/scorecard.yml/badge.svg)](https://github.com/shineway-tech/KnowMesh/actions/workflows/scorecard.yml)
 [![License: MIT](https://img.shields.io/badge/License-MIT-0f766e.svg)](LICENSE)
 [![Node.js](https://img.shields.io/badge/Node.js-%3E%3D24-1f6feb.svg)](package.json)
 [![SQLite first](https://img.shields.io/badge/state-SQLite--first-334155.svg)](docs/current-design.md)
@@ -126,6 +128,8 @@ Implemented foundation:
 - Multi-knowledge-base isolation and scoped routes.
 - Release smoke, artifact install smoke, and package boundary gates.
 - Windows / Ubuntu CI on Node.js 24.
+- CodeQL, OpenSSF Scorecard, secret scanning, push protection, and private vulnerability reporting.
+- `main` branch protection requires Ubuntu / Windows CI, PR review, and resolved conversations.
 
 Near-term priorities:
 
@@ -133,7 +137,6 @@ Near-term priorities:
 - Expert plugin boundaries and authoring documentation.
 - Better parser / OCR provider adapters.
 - OpenAPI-ready integration contract.
-- Public security reporting, branch protection, and supply-chain checks.
 
 ## Who It Is For
 

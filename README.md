@@ -7,6 +7,8 @@
 ![KnowMesh hero](assets/readme/hero.png)
 
 [![CI](https://github.com/shineway-tech/KnowMesh/actions/workflows/ci.yml/badge.svg)](https://github.com/shineway-tech/KnowMesh/actions/workflows/ci.yml)
+[![CodeQL](https://github.com/shineway-tech/KnowMesh/actions/workflows/codeql.yml/badge.svg)](https://github.com/shineway-tech/KnowMesh/actions/workflows/codeql.yml)
+[![Scorecard](https://github.com/shineway-tech/KnowMesh/actions/workflows/scorecard.yml/badge.svg)](https://github.com/shineway-tech/KnowMesh/actions/workflows/scorecard.yml)
 [![License: MIT](https://img.shields.io/badge/License-MIT-0f766e.svg)](LICENSE)
 [![Node.js](https://img.shields.io/badge/Node.js-%3E%3D24-1f6feb.svg)](package.json)
 [![SQLite first](https://img.shields.io/badge/state-SQLite--first-334155.svg)](docs/current-design.md)
@@ -126,6 +128,8 @@ KnowMesh 仍处于 `0.1.0-alpha` 阶段，方向和底座已经成形，但还�
 - 多知识库隔离和 scoped routes。
 - release smoke、artifact install smoke、package boundary gate。
 - Windows / Ubuntu CI on Node.js 24。
+- CodeQL、OpenSSF Scorecard、secret scanning、push protection 和私密漏洞报告。
+- `main` 分支保护要求 Ubuntu / Windows CI、PR review 和会话解决。
 
 接下来优先推进：
 
@@ -133,7 +137,6 @@ KnowMesh 仍处于 `0.1.0-alpha` 阶段，方向和底座已经成形，但还�
 - Expert 插件边界和作者文档。
 - 更强的本地解析 / OCR provider 适配。
 - OpenAPI-ready 集成契约。
-- 公开后的安全报告、保护分支和供应链检查。
 
 ## 适合谁
 
