@@ -1,6 +1,6 @@
 # Contributing to KnowMesh
 
-KnowMesh is being built as a local-first knowledge-base construction toolkit.
+KnowMesh is being built as a local-first knowledge-base builder for auditable RAG, traceable citations, and maintainable document intelligence.
 
 ## Development principles
 
@@ -19,6 +19,7 @@ migrate useful information into `docs/current-design.md` and delete the old file
 npm install
 npm test
 npm run smoke:release
+npm run smoke:artifact
 npm run verify:package-boundary
 npm run doctor
 npm run demo:plan

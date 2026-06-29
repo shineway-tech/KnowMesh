@@ -1,0 +1,125 @@
+<svg width="1600" height="900" viewBox="0 0 1600 900" xmlns="http://www.w3.org/2000/svg" role="img" aria-label="KnowMesh architecture overview">
+          <defs>
+            <pattern id="arch-grid" width="44" height="44" patternUnits="userSpaceOnUse">
+              <path d="M44 0H0V44" fill="none" stroke="#2b3a48" stroke-width="1" opacity="0.38"/>
+            </pattern>
+            <marker id="arrow-cyan" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="8" markerHeight="8" orient="auto-start-reverse">
+              <path d="M0 0L10 5L0 10Z" fill="#4ab7ff"/>
+            </marker>
+            <marker id="arrow-teal" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="8" markerHeight="8" orient="auto-start-reverse">
+              <path d="M0 0L10 5L0 10Z" fill="#18a999"/>
+            </marker>
+            <marker id="arrow-amber" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="8" markerHeight="8" orient="auto-start-reverse">
+              <path d="M0 0L10 5L0 10Z" fill="#f2b84b"/>
+            </marker>
+            <filter id="arch-shadow" x="-20%" y="-20%" width="140%" height="140%">
+              <feDropShadow dx="0" dy="18" stdDeviation="15" flood-color="#020609" flood-opacity="0.32"/>
+            </filter>
+          </defs>
+
+          <rect width="1600" height="900" fill="#08111a"/>
+          <rect width="1600" height="900" fill="url(#arch-grid)"/>
+          <path d="M0 744C238 695 384 730 612 684C828 640 1032 596 1252 630C1416 656 1506 700 1600 682V900H0Z" fill="#0d1721" opacity="0.92"/>
+
+          <g transform="translate(74 56)">
+            <text x="0" y="64" font-family="Segoe UI, Microsoft YaHei UI, Arial, sans-serif" font-size="58" font-weight="650" fill="#eef6f8" letter-spacing="-1.6">KnowMesh</text>
+            <text x="302" y="64" font-family="Segoe UI, Microsoft YaHei UI, Arial, sans-serif" font-size="34" font-weight="570" fill="#9fb5c2" letter-spacing="5">知络</text>
+            <text x="0" y="108" font-family="Segoe UI, Microsoft YaHei UI, Arial, sans-serif" font-size="26" font-weight="520" fill="#a8bac6">本地优先的知识库构建系统</text>
+          </g>
+
+          <g transform="translate(86 182)">
+            <rect x="0" y="0" width="1428" height="562" rx="32" fill="#0d1721" stroke="#31475a" stroke-width="1.5" filter="url(#arch-shadow)"/>
+            <rect x="34" y="34" width="1360" height="494" rx="24" fill="#09131d" stroke="#223545"/>
+
+            <g transform="translate(84 410)">
+              <rect x="0" y="0" width="1260" height="72" rx="18" fill="#111c27" stroke="#32475a"/>
+              <text x="32" y="45" font-family="Cascadia Code, Consolas, monospace" font-size="24" font-weight="560" fill="#dbe8ee">Platform Layer</text>
+              <path d="M246 36H1184" stroke="#315064" stroke-width="2" stroke-dasharray="10 12"/>
+              <circle cx="586" cy="36" r="9" fill="#18a999"/>
+              <circle cx="866" cy="36" r="9" fill="#4ab7ff"/>
+              <circle cx="1088" cy="36" r="9" fill="#f2b84b"/>
+            </g>
+
+            <g transform="translate(84 50)">
+              <rect x="0" y="0" width="1260" height="72" rx="18" fill="#101b26" stroke="#31495c"/>
+              <text x="32" y="45" font-family="Cascadia Code, Consolas, monospace" font-size="24" font-weight="560" fill="#dbe8ee">Provider Layer</text>
+              <path d="M246 36H1184" stroke="#315064" stroke-width="2" stroke-dasharray="10 12"/>
+              <circle cx="350" cy="36" r="9" fill="#4ab7ff"/>
+              <circle cx="660" cy="36" r="9" fill="#18a999"/>
+              <circle cx="1010" cy="36" r="9" fill="#4ab7ff"/>
+            </g>
+
+            <g transform="translate(94 172)">
+              <rect x="0" y="0" width="214" height="160" rx="20" fill="#111d29" stroke="#3b5366" stroke-width="2"/>
+              <path d="M24 58C24 44 34 34 48 34H92L110 52H166C180 52 190 62 190 76V118C190 132 180 142 166 142H48C34 142 24 132 24 118Z" fill="#182838" stroke="#60798a" stroke-width="2"/>
+              <text x="107" y="136" text-anchor="middle" font-family="Cascadia Code, Consolas, monospace" font-size="21" font-weight="560" fill="#dbe8ee">Source Folder</text>
+            </g>
+
+            <g transform="translate(370 154)">
+              <rect x="0" y="0" width="226" height="196" rx="24" fill="#0e2428" stroke="#1f857b" stroke-width="2"/>
+              <circle cx="78" cy="74" r="34" fill="#0b151e" stroke="#18a999" stroke-width="4"/>
+              <path d="M78 40V108M44 74H112" stroke="#18a999" stroke-width="4"/>
+              <path d="M138 58H190M138 90H178M44 136H182" stroke="#95cfc8" stroke-width="9" stroke-linecap="round" opacity="0.52"/>
+              <text x="113" y="174" text-anchor="middle" font-family="Cascadia Code, Consolas, monospace" font-size="21" font-weight="560" fill="#d7fffa">KnowMesh Core</text>
+            </g>
+
+            <g transform="translate(660 154)">
+              <rect x="0" y="0" width="206" height="196" rx="24" fill="#201a11" stroke="#8a6823" stroke-width="2"/>
+              <path d="M54 64H152M54 99H152M54 134H126" stroke="#ffe1a1" stroke-width="10" stroke-linecap="round" opacity="0.66"/>
+              <path d="M157 48L171 76L202 80L179 101L185 132L157 116L129 132L135 101L112 80L143 76Z" fill="#f2b84b" opacity="0.96"/>
+              <text x="103" y="174" text-anchor="middle" font-family="Cascadia Code, Consolas, monospace" font-size="21" font-weight="560" fill="#ffe1a1">Expert</text>
+            </g>
+
+            <g transform="translate(930 154)">
+              <rect x="0" y="0" width="226" height="196" rx="24" fill="#111f2b" stroke="#3e6c89" stroke-width="2"/>
+              <ellipse cx="113" cy="58" rx="70" ry="22" fill="#172638" stroke="#4ab7ff" stroke-width="3"/>
+              <path d="M43 58V136C43 154 74 172 113 172C152 172 183 154 183 136V58" fill="#101b27" stroke="#3e6c89" stroke-width="3"/>
+              <ellipse cx="113" cy="136" rx="70" ry="22" fill="#142434" stroke="#3e6c89" stroke-width="3"/>
+              <text x="113" y="172" text-anchor="middle" font-family="Cascadia Code, Consolas, monospace" font-size="21" font-weight="560" fill="#d9efff">Asset Layer</text>
+            </g>
+
+            <g transform="translate(1218 154)">
+              <rect x="0" y="0" width="160" height="196" rx="24" fill="#101d29" stroke="#3e6c89" stroke-width="2"/>
+              <circle cx="80" cy="78" r="42" fill="#0b151e" stroke="#4ab7ff" stroke-width="4"/>
+              <path d="M80 36V78L112 106" fill="none" stroke="#4ab7ff" stroke-width="7" stroke-linecap="round" stroke-linejoin="round"/>
+              <path d="M44 142H116" stroke="#18a999" stroke-width="9" stroke-linecap="round"/>
+              <text x="80" y="172" text-anchor="middle" font-family="Cascadia Code, Consolas, monospace" font-size="18" font-weight="560" fill="#d9efff">Query Runtime</text>
+            </g>
+
+            <path d="M308 252H370" stroke="#4ab7ff" stroke-width="5" marker-end="url(#arrow-cyan)"/>
+            <path d="M596 252H660" stroke="#18a999" stroke-width="5" marker-end="url(#arrow-teal)"/>
+            <path d="M866 252H930" stroke="#4ab7ff" stroke-width="5" marker-end="url(#arrow-cyan)"/>
+            <path d="M1156 252H1218" stroke="#4ab7ff" stroke-width="5" marker-end="url(#arrow-cyan)"/>
+
+            <g transform="translate(383 334)">
+              <path d="M0 0C94 56 230 58 328 12C430 -36 526 -24 626 38C734 105 854 102 948 36" fill="none" stroke="#4ab7ff" stroke-width="3.5" stroke-linecap="round" opacity="0.75"/>
+              <circle cx="0" cy="0" r="10" fill="#08111a" stroke="#4ab7ff" stroke-width="3"/>
+              <circle cx="328" cy="12" r="10" fill="#08111a" stroke="#18a999" stroke-width="3"/>
+              <circle cx="626" cy="38" r="10" fill="#08111a" stroke="#4ab7ff" stroke-width="3"/>
+              <circle cx="948" cy="36" r="10" fill="#08111a" stroke="#f2b84b" stroke-width="3"/>
+            </g>
+
+            <g transform="translate(466 356)">
+              <rect x="0" y="0" width="772" height="44" rx="12" fill="#0e1822" stroke="#2f4557"/>
+              <text x="32" y="29" font-family="Cascadia Code, Consolas, monospace" font-size="20" font-weight="540" fill="#d9efff">Traceable citations</text>
+              <path d="M244 22H522" stroke="#4ab7ff" stroke-width="3" stroke-dasharray="12 10"/>
+              <text x="568" y="29" font-family="Cascadia Code, Consolas, monospace" font-size="20" font-weight="540" fill="#ffe1a1">Quality Contract</text>
+            </g>
+
+            <path d="M474 122V154" stroke="#18a999" stroke-width="4" marker-end="url(#arrow-teal)"/>
+            <path d="M1043 122V154" stroke="#4ab7ff" stroke-width="4" marker-end="url(#arrow-cyan)"/>
+            <path d="M742 350V410" stroke="#f2b84b" stroke-width="4" marker-end="url(#arrow-amber)"/>
+            <path d="M1043 350V410" stroke="#4ab7ff" stroke-width="4" marker-end="url(#arrow-cyan)"/>
+          </g>
+
+          <g transform="translate(91 795)" font-family="Cascadia Code, Consolas, monospace" font-size="22" font-weight="540" letter-spacing="0.2">
+            <rect x="0" y="0" width="182" height="52" rx="10" fill="#10252b" stroke="#1f7f78"/>
+            <text x="24" y="34" fill="#d7fffa">Auditable RAG</text>
+            <rect x="206" y="0" width="244" height="52" rx="10" fill="#111f2b" stroke="#356986"/>
+            <text x="230" y="34" fill="#d9efff">Traceable citations</text>
+            <rect x="474" y="0" width="210" height="52" rx="10" fill="#111f2a" stroke="#345a73"/>
+            <text x="498" y="34" fill="#dbe8ee">SQLite catalogs</text>
+            <rect x="708" y="0" width="212" height="52" rx="10" fill="#261f12" stroke="#7e6424"/>
+            <text x="732" y="34" fill="#ffe1a1">K12 Expert first</text>
+          </g>
+        </svg>
