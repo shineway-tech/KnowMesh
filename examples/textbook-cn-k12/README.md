@@ -1,8 +1,8 @@
 # 中国 K12 教材知识库样例
 
-这是 KnowMesh `0.1.0` 的 K12 增强模板样例, 用本机教材目录和阿里云配置展示真实教材知识库的配置形态。
+这是 KnowMesh `0.1.0` 的 K12 增强模板样例, 用用户已授权的本机教材目录和阿里云配置展示教材知识库的配置形态。
 
-无密钥本地检查请使用 `examples/local-demo/`。本目录用于真实教材和 Aliyun provider 配置。
+无密钥本地检查请使用 `examples/local-demo/`。本目录用于用户自备且已授权的教材目录和 Aliyun provider 配置。
 
 ## 适用范围
 
@@ -14,7 +14,7 @@
 - PDF 页面级 OCR 任务
 - 清洗后分片
 - `text-embedding-v4` 向量化
-- 写入 `china-textbook-oss-vec` 的 `textbooktextv41024core` 索引
+- 写入示例 OSS Vector Bucket 的 `knowmesh_example_v1` 索引
 
 ## 特别注意
 
@@ -22,10 +22,10 @@
 
 ## 本地检查
 
-先设置真实教材目录:
+先设置已授权的教材目录:
 
 ```bash
-KNOWMESH_K12_SOURCE_ROOT=/path/to/ChinaTextbook
+KNOWMESH_K12_SOURCE_ROOT=/path/to/authorized-k12-sources
 ```
 
 ```bash

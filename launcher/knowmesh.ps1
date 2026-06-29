@@ -4,8 +4,8 @@ param(
 )
 
 $ErrorActionPreference = "Stop"
-$NodeVersion = if ($env:KNOWMESH_NODE_VERSION) { $env:KNOWMESH_NODE_VERSION } else { "v22.16.0" }
-$MinimumNodeMajor = 20
+$NodeVersion = if ($env:KNOWMESH_NODE_VERSION) { $env:KNOWMESH_NODE_VERSION } else { "v24.18.0" }
+$MinimumNodeMajor = 24
 
 function Write-Step {
   param([string]$Message)

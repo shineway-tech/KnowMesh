@@ -1,8 +1,8 @@
 #!/usr/bin/env sh
 set -eu
 
-NODE_VERSION="${KNOWMESH_NODE_VERSION:-v22.16.0}"
-MIN_NODE_MAJOR=20
+NODE_VERSION="${KNOWMESH_NODE_VERSION:-v24.18.0}"
+MIN_NODE_MAJOR=24
 
 log() {
   printf '[KnowMesh] %s\n' "$*"

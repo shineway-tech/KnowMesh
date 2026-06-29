@@ -14,20 +14,20 @@ test("platform runtime inventory reports launchers, private node runtime, and sy
   fs.mkdirSync(path.join(projectRoot, "launcher"), { recursive: true });
   fs.mkdirSync(path.join(projectRoot, "node_modules", "yaml"), { recursive: true });
   fs.mkdirSync(path.join(projectRoot, "node_modules", "better-sqlite3"), { recursive: true });
-  fs.mkdirSync(path.join(runtimeRoot, "node", "v22.16.0-linux-x64", "bin"), { recursive: true });
+  fs.mkdirSync(path.join(runtimeRoot, "node", "v24.18.0-linux-x64", "bin"), { recursive: true });
   fs.mkdirSync(binDir, { recursive: true });
   fs.writeFileSync(path.join(projectRoot, "knowmesh"), "#!/usr/bin/env sh\nexec \"$script_dir/launcher/knowmesh\" \"$@\"\n", "utf8");
-  fs.writeFileSync(path.join(projectRoot, "launcher", "knowmesh"), "KNOWMESH_NODE_VERSION=v22.16.0\nInstalling a private runtime\n", "utf8");
+  fs.writeFileSync(path.join(projectRoot, "launcher", "knowmesh"), "KNOWMESH_NODE_VERSION=v24.18.0\nInstalling a private runtime\n", "utf8");
   fs.writeFileSync(path.join(projectRoot, "package.json"), JSON.stringify({
     name: "knowmesh",
     version: "0.1.0",
-    engines: { node: ">=20" },
+    engines: { node: ">=24" },
     dependencies: { yaml: "^2.7.0", "better-sqlite3": "^12.11.1" }
   }), "utf8");
   for (const command of ["gs", "soffice", "xdg-open", "curl"]) {
     fs.writeFileSync(path.join(binDir, command), "", "utf8");
   }
-  const nodePath = path.join(runtimeRoot, "node", "v22.16.0-linux-x64", "bin", "node");
+  const nodePath = path.join(runtimeRoot, "node", "v24.18.0-linux-x64", "bin", "node");
   fs.writeFileSync(nodePath, "", "utf8");
 
   const inventory = platformRuntimeInventory({ projectRoot }, {
@@ -35,7 +35,7 @@ test("platform runtime inventory reports launchers, private node runtime, and sy
     arch: "x64",
     release: "6.1.0",
     nodePath,
-    nodeVersion: "v22.16.0",
+    nodeVersion: "v24.18.0",
     env: {
       HOME: temp,
       KNOWMESH_RUNTIME_DIR: runtimeRoot,
@@ -46,7 +46,10 @@ test("platform runtime inventory reports launchers, private node runtime, and sy
   assert.equal(inventory.kind, "knowmesh.platformRuntimeInventory");
   assert.equal(inventory.summary.status, "ready");
   assert.equal(inventory.node.privateRuntime, true);
+  assert.equal(inventory.node.minimumVersion, ">=24");
+  assert.equal(inventory.node.packagedVersion, "v24.18.0");
   assert.equal(inventory.launchers.nodeIndependent, true);
+  assert.equal(inventory.launchers.privateRuntimeVersion, "v24.18.0");
   assert.equal(inventory.dependencies.pdfRenderer.status, "pass");
   assert.equal(inventory.dependencies.officeConverter.status, "pass");
   assert.equal(inventory.dependencies.packageDependencies.status, "pass");
@@ -60,7 +63,7 @@ test("platform runtime inventory gives guided actions for missing optional depen
   fs.writeFileSync(path.join(projectRoot, "package.json"), JSON.stringify({
     name: "knowmesh",
     version: "0.1.0",
-    engines: { node: ">=20" },
+    engines: { node: ">=24" },
     dependencies: { yaml: "^2.7.0", "better-sqlite3": "^12.11.1" }
   }), "utf8");
 
@@ -69,7 +72,7 @@ test("platform runtime inventory gives guided actions for missing optional depen
     arch: "x64",
     release: "6.1.0",
     nodePath: "/usr/bin/node",
-    nodeVersion: "v22.16.0",
+    nodeVersion: "v24.18.0",
     env: {
       HOME: temp,
       PATH: ""
@@ -84,4 +87,35 @@ test("platform runtime inventory gives guided actions for missing optional depen
   assert.ok(inventory.guidedActions.some((item) => item.key === "installLibreOffice"));
   assert.ok(inventory.guidedActions.some((item) => item.key === "installPackages"));
   assert.doesNotMatch(JSON.stringify(inventory), /apiKey|secret|credential/i);
+});
+
+test("platform runtime inventory derives the Node gate from package engines", () => {
+  const temp = fs.mkdtempSync(path.join(os.tmpdir(), "knowmesh-platform-runtime-node-gate-"));
+  const projectRoot = path.join(temp, "project");
+  fs.mkdirSync(path.join(projectRoot, "launcher"), { recursive: true });
+  fs.writeFileSync(path.join(projectRoot, "launcher", "knowmesh"), "NODE_VERSION=\"${KNOWMESH_NODE_VERSION:-v24.18.0}\"\nInstalling a private runtime\n", "utf8");
+  fs.writeFileSync(path.join(projectRoot, "package.json"), JSON.stringify({
+    name: "knowmesh",
+    version: "0.1.0",
+    engines: { node: ">=24" },
+    dependencies: {}
+  }), "utf8");
+
+  const inventory = platformRuntimeInventory({ projectRoot }, {
+    platform: "linux",
+    arch: "x64",
+    release: "6.1.0",
+    nodePath: "/usr/bin/node",
+    nodeVersion: "v23.11.0",
+    env: {
+      HOME: temp,
+      PATH: ""
+    }
+  });
+
+  assert.equal(inventory.node.status, "fail");
+  assert.equal(inventory.node.minimumMajor, 24);
+  assert.equal(inventory.node.minimumVersion, ">=24");
+  assert.equal(inventory.node.packagedVersion, "v24.18.0");
+  assert.ok(inventory.guidedActions.some((item) => item.key === "upgradeNode" && /24\+/.test(item.message.en)));
 });

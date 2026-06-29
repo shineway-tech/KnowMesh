@@ -4,7 +4,7 @@ KnowMesh handles local documents, cloud credentials, and generated knowledge-bas
 
 ## Reporting
 
-Please report security issues privately before opening a public issue. GitHub users can use private vulnerability reporting for `shineway-tech/KnowMesh`.
+Please report security issues privately before opening a public issue. When GitHub private vulnerability reporting is enabled for `shineway-tech/KnowMesh`, use that channel. Until then, open a minimal issue asking for a private security contact path and do not include exploit details, credentials, document text, logs, or local paths.
 
 ## Secrets
 

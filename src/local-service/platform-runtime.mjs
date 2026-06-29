@@ -4,8 +4,8 @@ import path from "node:path";
 
 import { buildOpenPathCommand } from "./local-paths.mjs";
 
-const minimumNodeMajor = 20;
-const packagedNodeVersion = "v22.16.0";
+const fallbackMinimumNodeMajor = 24;
+const fallbackPackagedNodeVersion = "v24.18.0";
 
 export function platformRuntimeInventory(state, options = {}) {
   const projectRoot = path.resolve(state.projectRoot || process.cwd());
@@ -16,8 +16,10 @@ export function platformRuntimeInventory(state, options = {}) {
   const nodeVersion = options.nodeVersion || process.version;
   const runtimeRoot = defaultRuntimeRoot(state, { platform, env });
   const packageInfo = readPackageInfo(projectRoot, state.packageInfo);
+  const minimumNodeMajor = packageMinimumNodeMajor(packageInfo);
   const launchers = inspectLaunchers(projectRoot, platform);
-  const node = inspectNodeRuntime({ nodePath, nodeVersion, runtimeRoot, platform, arch });
+  const packagedNodeVersion = launchers.privateRuntimeVersion || fallbackPackagedNodeVersion;
+  const node = inspectNodeRuntime({ nodePath, nodeVersion, runtimeRoot, platform, arch, minimumNodeMajor, packagedNodeVersion });
   const dependencies = inspectDependencies(state, {
     projectRoot,
     packageInfo,
@@ -59,7 +61,7 @@ export function platformRuntimeInventory(state, options = {}) {
   };
 }
 
-function inspectNodeRuntime({ nodePath, nodeVersion, runtimeRoot, platform, arch }) {
+function inspectNodeRuntime({ nodePath, nodeVersion, runtimeRoot, platform, arch, minimumNodeMajor, packagedNodeVersion }) {
   const major = nodeMajor(nodeVersion);
   const resolvedNodePath = path.resolve(nodePath || "");
   const privateRuntime = runtimeRoot ? isPathInside(resolvedNodePath, runtimeRoot) : false;
@@ -69,6 +71,7 @@ function inspectNodeRuntime({ nodePath, nodeVersion, runtimeRoot, platform, arch
     version: nodeVersion || "",
     executable: resolvedNodePath,
     minimumVersion: `>=${minimumNodeMajor}`,
+    minimumMajor: minimumNodeMajor,
     privateRuntime,
     packagedVersion: packagedNodeVersion,
     target: `${platform}-${arch}`,
@@ -95,17 +98,19 @@ function inspectLaunchers(projectRoot, platform) {
       required: definition.platforms.includes(platform) && definition.required,
       relativePath: definition.relativePath.replaceAll("\\", "/"),
       exists: fs.existsSync(absolutePath),
-      nodeInstaller: hasPrivateRuntimeInstaller(content)
+      nodeInstaller: hasPrivateRuntimeInstaller(content),
+      nodeVersion: extractPackagedNodeVersion(content)
     };
   });
   const requiredItems = items.filter((item) => item.required);
   const missing = requiredItems.filter((item) => !item.exists);
   const nodeIndependent = requiredItems.some((item) => item.exists && item.nodeInstaller);
   const status = missing.length ? "fail" : nodeIndependent ? "pass" : "warn";
+  const privateRuntimeVersion = items.find((item) => item.nodeVersion)?.nodeVersion || fallbackPackagedNodeVersion;
   return {
     status,
     nodeIndependent,
-    privateRuntimeVersion: packagedNodeVersion,
+    privateRuntimeVersion,
     required: requiredItems.map((item) => item.relativePath),
     missing: missing.map((item) => item.relativePath),
     items
@@ -232,8 +237,8 @@ function buildGuidedActions({ node, launchers, dependencies, platform }) {
       "upgradeNode",
       "安装或使用打包启动器",
       "Install Node or use packaged launcher",
-      `安装 Node.js ${minimumNodeMajor}+，或直接通过 KnowMesh 启动器启动以准备私有运行时。`,
-      `Install Node.js ${minimumNodeMajor}+ or start through the KnowMesh launcher to prepare a private runtime.`
+      `安装 Node.js ${node.minimumMajor}+，或直接通过 KnowMesh 启动器启动以准备私有运行时。`,
+      `Install Node.js ${node.minimumMajor}+ or start through the KnowMesh launcher to prepare a private runtime.`
     ));
   }
   if (launchers.status !== "pass") {
@@ -323,6 +328,12 @@ function readPackageInfo(projectRoot, fromState = null) {
   }
 }
 
+function packageMinimumNodeMajor(packageInfo) {
+  const engine = packageInfo?.engines?.node || "";
+  const match = String(engine).match(/>=\s*(\d+)/);
+  return match ? Number(match[1]) : fallbackMinimumNodeMajor;
+}
+
 function launcherDefinition(key, relativePath, platforms, required) {
   return { key, relativePath, platforms, required };
 }
@@ -341,6 +352,18 @@ function readTextIfSmall(file) {
 function hasPrivateRuntimeInstaller(content) {
   return /KNOWMESH_NODE_VERSION|NODE_VERSION/.test(content)
     && /private Node runtime|private runtime|Install-KnowMeshNode|install_knowmesh_node/i.test(content);
+}
+
+function extractPackagedNodeVersion(content) {
+  for (const pattern of [
+    /KNOWMESH_NODE_VERSION[^\r\n]*?(v\d+\.\d+\.\d+)/,
+    /NODE_VERSION[^\r\n]*?(v\d+\.\d+\.\d+)/,
+    /NodeVersion[^\r\n]*?(v\d+\.\d+\.\d+)/
+  ]) {
+    const match = String(content || "").match(pattern);
+    if (match) return match[1];
+  }
+  return "";
 }
 
 function findGhostscriptCommand({ platform, env }) {

@@ -25,7 +25,7 @@ On macOS or Linux from the repository root:
 launcher/knowmesh start
 ```
 
-Launchers first look for Node.js 20 or newer. If it is missing, they prepare a
+Launchers first look for Node.js 24 or newer. If it is missing, they prepare a
 private Node runtime under the user runtime directory and do not modify the
 system PATH.
 
@@ -53,7 +53,7 @@ Default local user-data roots:
 
 - Windows: `%LOCALAPPDATA%\KnowMesh`
 - macOS: `~/Library/Application Support/KnowMesh`
-- Linux: `~/.local/share/KnowMesh`
+- Linux: `~/.local/share/knowmesh`
 
 The current Windows default layout is:
 
@@ -152,6 +152,14 @@ Preview the package boundary without writing a tarball:
 npm pack --dry-run --json
 ```
 
+Create a release tarball in a temporary directory and record its checksum:
+
+```bash
+tmpdir="$(mktemp -d)"
+npm pack --pack-destination "$tmpdir"
+sha256sum "$tmpdir"/knowmesh-*.tgz
+```
+
 ## Cross-Platform Checklist
 
 Windows:
@@ -159,14 +167,14 @@ Windows:
 - `.\knowmesh.cmd start` delegates to `launcher\knowmesh.cmd`.
 - `launcher\knowmesh.cmd` runs `launcher\knowmesh.ps1`.
 - PowerShell launcher installs a private Node runtime under
-  `%LOCALAPPDATA%\KnowMesh\runtime` when system Node.js 20+ is missing.
+  `%LOCALAPPDATA%\KnowMesh\runtime` when system Node.js 24+ is missing.
 - File-open actions use Windows shell commands through guarded path helpers.
 
 macOS and Linux:
 
 - `./knowmesh start` delegates to `launcher/knowmesh`.
 - The POSIX launcher installs a private Node runtime under
-  `~/.knowmesh/runtime` when system Node.js 20+ is missing.
+  `~/.knowmesh/runtime` when system Node.js 24+ is missing.
 - The launcher needs `curl` or `wget` only when it has to download Node.
 - File-open actions use platform file-manager commands through guarded path
   helpers.
@@ -178,6 +186,27 @@ Optional dependencies:
   conversion.
 - Missing optional dependencies should appear as guided actions in
   `GET /api/platform/runtime`; they should not corrupt SQLite state.
+
+## GitHub Repository Gates
+
+Current configured gates:
+
+- CI runs on `ubuntu-latest` and `windows-latest` with Node.js 24.
+- Dependabot is enabled for npm packages and GitHub Actions.
+- Issues and Discussions are enabled for public support; Wiki is disabled.
+- Squash merge is enabled, merge commits are disabled, and branches are deleted
+  after merge.
+
+Gates that must be enabled once GitHub allows them for the repository:
+
+- Protect `main` with required CI checks before merge.
+- Enable secret scanning and push protection.
+- Enable private vulnerability reporting, then update `SECURITY.md` and issue
+  template contact links to point directly to that private channel.
+
+On a free private repository, GitHub can reject these repository-protection and
+security APIs. Treat that as a hosting limitation, not as an accepted release
+posture after the project becomes public.
 
 ## Local Verification
 

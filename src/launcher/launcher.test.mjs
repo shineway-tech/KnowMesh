@@ -14,6 +14,11 @@ function readLauncher(name) {
   return fs.readFileSync(file, "utf8");
 }
 
+function packageMinimumNodeMajor() {
+  const packageJson = JSON.parse(fs.readFileSync(path.join(projectRoot, "package.json"), "utf8"));
+  return Number(String(packageJson.engines.node || "").match(/\d+/)?.[0] || 0);
+}
+
 test("launcher provides Node-independent user entrypoints", () => {
   const cmd = readLauncher("knowmesh.cmd");
   const powershell = readLauncher("knowmesh.ps1");
@@ -58,6 +63,17 @@ test("launcher starts the Web Console through a private runtime when system Node
   assert.match(shell, /ensure_node_modules/);
   assert.match(shell, /src\/cli\/knowmesh\.mjs/);
   assert.match(shell, /start/);
+});
+
+test("launcher Node runtime matches the package engine", () => {
+  const powershell = readLauncher("knowmesh.ps1");
+  const shell = readLauncher("knowmesh");
+  const minimum = packageMinimumNodeMajor();
+
+  assert.match(powershell, new RegExp(`\\$MinimumNodeMajor = ${minimum}\\b`));
+  assert.match(shell, new RegExp(`MIN_NODE_MAJOR=${minimum}\\b`));
+  assert.match(powershell, new RegExp(`\\$NodeVersion = .*"v${minimum}\\.`));
+  assert.match(shell, new RegExp(`NODE_VERSION="\\$\\{KNOWMESH_NODE_VERSION:-v${minimum}\\.`));
 });
 
 test("README documents launcher-first startup and keeps maintainer Node commands separate", () => {
