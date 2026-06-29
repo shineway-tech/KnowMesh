@@ -10,6 +10,7 @@ import Database from "better-sqlite3";
 import { checkAliyunPermissions, checkAliyunStorage } from "./aliyun.mjs";
 import { extractK12EducationMetadata, extractK12QueryConstraints } from "../core/k12-metadata.mjs";
 import { checkEnvironment } from "./environment.mjs";
+import { latestJob } from "./jobs.mjs";
 import { buildOpenPathCommand } from "./local-paths.mjs";
 import { startLocalService } from "./server.mjs";
 import { catalogDatabasePath } from "./storage.mjs";
@@ -3714,6 +3715,39 @@ test("local service restores latest job progress after restart", async () => {
     assert.ok(restored.job.artifacts.some((item) => item.key === "pipelineReport"));
   } finally {
     if (service) await service.close();
+    fs.rmSync(userDataRoot, { recursive: true, force: true });
+  }
+});
+
+test("job isolation preserves POSIX absolute workspace roots", async () => {
+  const userDataRoot = fs.mkdtempSync(path.join(os.tmpdir(), "knowmesh-posix-workspace-test-"));
+  const service = await startLocalService({ projectRoot, userDataRoot, port: 0, open: false });
+  try {
+    const knowledgeBase = await createK12TestKnowledgeBase(service);
+    const posixBaseWorkspace = "/tmp/knowmesh-ci-workspace/workspace";
+    const posixWorkspaceRoot = `${posixBaseWorkspace}/knowledge-bases/${knowledgeBase.id}/versions/build-posix-root`;
+    writeCatalogJobStateFixture(userDataRoot, knowledgeBase.id, {
+      latestJobId: "job-posix-root",
+      jobs: [{
+        id: "job-posix-root",
+        status: "completed",
+        mode: "local",
+        template: "textbook-cn-k12",
+        createdAt: "2026-06-29T00:00:00.000Z",
+        updatedAt: "2026-06-29T00:00:00.000Z",
+        summary: { workspaceRoot: posixWorkspaceRoot },
+        tasks: [
+          { key: "index", status: "completed" }
+        ]
+      }]
+    });
+
+    const restored = latestJob({ userDataRoot, knowledgeBaseId: knowledgeBase.id }).job;
+
+    assert.equal(restored.summary.baseWorkspaceRoot.replaceAll("\\", "/"), posixBaseWorkspace);
+    assert.equal(restored.summary.workspaceRoot.replaceAll("\\", "/"), posixWorkspaceRoot);
+  } finally {
+    await service.close();
     fs.rmSync(userDataRoot, { recursive: true, force: true });
   }
 });

@@ -871,13 +871,14 @@ function createDatasetVersionId(job) {
 function parseVersionWorkspaceRoot(workspaceRoot) {
   const normalized = path.normalize(String(workspaceRoot || ""));
   if (!normalized) return null;
-  const parts = normalized.split(/[\\/]+/).filter(Boolean);
+  const root = path.parse(normalized).root;
+  const relativePath = root ? path.relative(root, normalized) : normalized;
+  const parts = relativePath.split(/[\\/]+/).filter(Boolean);
   for (let index = parts.length - 4; index >= 0; index -= 1) {
     if (parts[index] !== "knowledge-bases" || parts[index + 2] !== "versions") continue;
     const baseParts = parts.slice(0, index);
-    const root = path.parse(normalized).root;
     const baseWorkspaceRoot = baseParts.length
-      ? (root && normalized.startsWith(root) ? path.join(root, ...baseParts.slice(root ? 1 : 0)) : path.join(...baseParts))
+      ? path.join(root || "", ...baseParts)
       : root;
     return {
       baseWorkspaceRoot: baseWorkspaceRoot || root || "",
