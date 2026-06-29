@@ -38,6 +38,14 @@ const requiredBusinessSources = [
   "briefing.dps"
 ];
 
+function previewState(temp, id) {
+  return {
+    projectRoot: temp,
+    userDataRoot: path.join(temp, "user-data"),
+    knowledgeBaseId: id
+  };
+}
+
 test("includePatterns includes commercial source formats for K12 and general templates", () => {
   for (const templateId of ["textbook-cn-k12", "general-docs"]) {
     const patterns = includePatterns(getTemplate(templateId));
@@ -56,7 +64,7 @@ test("previewScan groups files by how KnowMesh will handle them", async () => {
     fs.writeFileSync(path.join(sourceRoot, file), file, "utf8");
   }
 
-  const result = await previewScan({ projectRoot: temp }, {
+  const result = await previewScan(previewState(temp, "kb-preview-types"), {
     template: "general-docs",
     draft: {
       template: "general-docs",
@@ -87,7 +95,7 @@ test("previewScan filters K12 sources by selected stage subject grade and volume
     writeSourceFile(sourceRoot, file);
   }
 
-  const result = await previewScan({ projectRoot: temp }, {
+  const result = await previewScan(previewState(temp, "kb-preview-k12-scope"), {
     mode: "local",
     template: "textbook-cn-k12",
     draft: {
@@ -130,7 +138,7 @@ test("previewScan keeps K12 source scope exact for similar stage and subject fol
     writeSourceFile(sourceRoot, file);
   }
 
-  const result = await previewScan({ projectRoot: temp }, {
+  const result = await previewScan(previewState(temp, "kb-preview-k12-exact-scope"), {
     mode: "aliyun",
     template: "textbook-cn-k12",
     draft: {
@@ -171,7 +179,7 @@ test("previewScan does not filter by optional K12 volume when it is not selected
     writeSourceFile(sourceRoot, file);
   }
 
-  const result = await previewScan({ projectRoot: temp }, {
+  const result = await previewScan(previewState(temp, "kb-preview-k12-volume"), {
     mode: "local",
     template: "textbook-cn-k12",
     draft: {
@@ -203,7 +211,7 @@ test("previewScan keeps senior high sources without explicit grade when all seni
     writeSourceFile(sourceRoot, file);
   }
 
-  const result = await previewScan({ projectRoot: temp }, {
+  const result = await previewScan(previewState(temp, "kb-preview-k12-senior"), {
     mode: "local",
     template: "textbook-cn-k12",
     draft: {

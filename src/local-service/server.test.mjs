@@ -1116,6 +1116,7 @@ test("local service exposes commercial template library", async () => {
 });
 
 test("local service refreshes the Aliyun model catalog without recommending old models", async () => {
+  const userDataRoot = fs.mkdtempSync(path.join(os.tmpdir(), "knowmesh-model-catalog-test-"));
   const officialDocs = [
     "qwen-vl-ocr-2025-11-20 qwen-plus qwen-max",
     "text-embedding-v4 qwen3-vl-embedding tongyi-embedding-vision-flash-2026-03-06",
@@ -1123,6 +1124,7 @@ test("local service refreshes the Aliyun model catalog without recommending old 
   ].join("\n");
   const service = await startLocalService({
     projectRoot,
+    userDataRoot,
     port: 0,
     open: false,
     fetchImpl: async () => ({
@@ -1132,6 +1134,7 @@ test("local service refreshes the Aliyun model catalog without recommending old 
     })
   });
   try {
+    await createK12TestKnowledgeBase(service);
     const response = await fetch(`${service.url}/api/aliyun/model-catalog/refresh`, {
       method: "POST",
       headers: { "content-type": "application/json" },
@@ -1157,6 +1160,7 @@ test("local service refreshes the Aliyun model catalog without recommending old 
     assert.ok(body.catalog.rerank.every((item) => item.docUrl && item.pricingUrl));
   } finally {
     await service.close();
+    fs.rmSync(userDataRoot, { recursive: true, force: true });
   }
 });
 
@@ -6197,8 +6201,12 @@ test("aliyun storage check does not diagnose OSS vector signature errors as RAM 
 });
 
 test("local service defaults credentials to the OS user data directory and exposes safe open targets", async () => {
+  const originalLocalAppData = process.env.LOCALAPPDATA;
+  const tempLocalAppData = fs.mkdtempSync(path.join(os.tmpdir(), "knowmesh-os-user-data-"));
+  process.env.LOCALAPPDATA = tempLocalAppData;
   const service = await startLocalService({ projectRoot, port: 0, open: false });
   try {
+    await createK12TestKnowledgeBase(service);
     const stateResponse = await fetch(`${service.url}/api/setup/state`);
     const state = await stateResponse.json();
     const openCredentialResponse = await fetch(`${service.url}/api/local/paths/open`, {
@@ -6228,6 +6236,12 @@ test("local service defaults credentials to the OS user data directory and expos
     assert.equal(blocked.ok, false);
   } finally {
     await service.close();
+    if (originalLocalAppData === undefined) {
+      delete process.env.LOCALAPPDATA;
+    } else {
+      process.env.LOCALAPPDATA = originalLocalAppData;
+    }
+    fs.rmSync(tempLocalAppData, { recursive: true, force: true });
   }
 });
 
