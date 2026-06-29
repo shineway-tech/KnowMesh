@@ -1,0 +1,132 @@
+kind: knowmesh.knowledgeBase
+apiVersion: v1
+
+project:
+  id: textbook-cn-k12
+  name: 中国 K12 教材知识库
+  language: zh-CN
+  description: 以中国 K12 教材为蓝本的 KnowMesh 示例知识库。
+
+workspace:
+  root: ./workspace/textbook-cn-k12
+  artifactRoot: ./workspace/textbook-cn-k12/artifacts
+  manifests: ./workspace/textbook-cn-k12/manifests
+
+source:
+  type: filesystem
+  root: ${KNOWMESH_K12_SOURCE_ROOT}
+  scope: k12
+  include:
+    - "**/*.pdf"
+    - "**/*.pdf.*"
+  splitPdf:
+    mergeParts: true
+    partPattern: ".pdf.N"
+    orderBy: partNumber
+    sourcePartsField: sourceParts
+
+storage:
+  provider: aliyun-oss
+  region: ${ALIYUN_REGION}
+  bucket: ${ALIYUN_OSS_BUCKET}
+  endpoint: ${ALIYUN_OSS_ENDPOINT}
+  profile: ${ALIYUN_OSS_PROFILE}
+  prefixes:
+    raw: textbook-cn-k12/raw/
+    merged: textbook-cn-k12/merged/
+    renderedPages: textbook-cn-k12/pages/
+    ocr: textbook-cn-k12/ocr/
+    normalized: textbook-cn-k12/normalized/
+    chunks: textbook-cn-k12/chunks/
+    reports: textbook-cn-k12/reports/
+
+models:
+  ocr:
+    provider: qwen
+    model: ${KNOWMESH_OCR_MODEL}
+    mode: batch
+    pageShardSize: 1000
+    concurrency: 2
+  embedding:
+    provider: qwen
+    model: ${KNOWMESH_EMBEDDING_MODEL}
+    mode: batch
+    dimensions: 1024
+    groupShards: 5
+
+vector:
+  provider: aliyun-vector-bucket
+  bucket: ${ALIYUN_VECTOR_BUCKET}
+  index: ${ALIYUN_VECTOR_INDEX}
+  dimensions: 1024
+  namespace: textbook-cn-k12
+
+metadata:
+  required:
+    - document_id
+    - version_id
+    - title
+    - subject
+    - stage
+    - grade
+    - volume
+    - publisher
+    - page_number
+    - chunk_id
+    - source_uri
+  filters:
+    - subject
+    - stage
+    - grade
+    - publisher
+    - volume
+    - curriculum_version
+    - active
+
+chunking:
+  targetTokens: 450
+  maxTokens: 800
+  overlapTokens: 80
+  preservePageBoundary: true
+  splitBy:
+    - heading
+    - paragraph
+    - page
+
+normalization:
+  keepRawOcr: true
+  cleanTextForEmbedding: true
+  removeRepeatedHeadersFooters: true
+  removePageNumbers: true
+  removeWatermarks: true
+  normalizeWhitespace: true
+  keepTablesAsMarkdown: true
+
+versioning:
+  strategy: manifest-active-version
+  activeManifest: ./workspace/textbook-cn-k12/manifests/active.json
+  retirePreviousVersionsByDefault: true
+  conflictDetection:
+    enabled: true
+    compareBy:
+      - canonical_title
+      - subject
+      - stage
+      - grade
+      - volume
+      - publisher
+
+quality:
+  minOcrTextLengthPerPage: 20
+  minChunkChars: 80
+  requireCitation: true
+  reportFailures: true
+  failurePolicy: record-and-continue
+
+runtime:
+  uploadConcurrency: 2
+  ocrConcurrency: 2
+  embeddingConcurrency: 1
+  retry:
+    maxAttempts: 3
+    backoffSeconds: 10

@@ -1,0 +1,20 @@
+# Changelog
+
+All notable user-facing changes are recorded here with numeric versions.
+
+## 0.1.0
+
+Initial local-first KnowMesh release line.
+
+Current scope:
+
+- Local Web Console on `127.0.0.1:7457`.
+- Multi-knowledge-base isolation.
+- Guided setup for Aliyun mode and local mode.
+- K12 and general document templates.
+- Source scanning, execution preview, task execution, checkpoints, and realtime logs.
+- Query Runtime shared by console testing and integration APIs.
+- Document maintenance, version records, answer feedback, and diagnostics.
+- Aliyun OSS Vector plus OSS Sidecar metadata contract.
+
+This version is still pre-publication and is being prepared for GitHub open source release.

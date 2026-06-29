@@ -1,0 +1,69 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://knowmesh.local/schemas/active-manifest.schema.json",
+  "title": "KnowMeshActiveManifest",
+  "type": "object",
+  "required": ["kind", "apiVersion", "generatedAt", "project", "status", "activeVersions"],
+  "properties": {
+    "kind": { "const": "knowmesh.activeManifest" },
+    "apiVersion": { "type": "string" },
+    "generatedAt": { "type": "string" },
+    "project": {
+      "type": "object",
+      "required": ["id"],
+      "additionalProperties": true
+    },
+    "status": { "enum": ["proposed", "active", "retired"] },
+    "datasetVersionId": { "type": "string" },
+    "knowledgeBase": {
+      "anyOf": [
+        { "type": "null" },
+        {
+          "type": "object",
+          "required": ["id"],
+          "properties": {
+            "id": { "type": "string" }
+          },
+          "additionalProperties": true
+        }
+      ]
+    },
+    "activatedAt": { "type": "string" },
+    "job": {
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "mode": { "type": "string" },
+        "template": { "type": "string" }
+      },
+      "additionalProperties": true
+    },
+    "target": {
+      "type": "object",
+      "additionalProperties": true
+    },
+    "quality": {
+      "type": "object",
+      "additionalProperties": true
+    },
+    "activeVersions": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["document_id", "version_id", "lifecycle"],
+        "properties": {
+          "document_id": { "type": "string" },
+          "version_id": { "type": "string" },
+          "title": { "type": "string" },
+          "lifecycle": { "type": "string" }
+        },
+        "additionalProperties": false
+      }
+    },
+    "rollback": {
+      "type": "object",
+      "additionalProperties": true
+    }
+  },
+  "additionalProperties": false
+}

@@ -1,0 +1,66 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://knowmesh.local/schemas/index-record.schema.json",
+  "title": "KnowMeshIndexRecord",
+  "type": "object",
+  "required": [
+    "chunk_id",
+    "document_id",
+    "version_id",
+    "active",
+    "text",
+    "embedding_model",
+    "metadata"
+  ],
+  "properties": {
+    "chunk_id": { "type": "string" },
+    "document_id": { "type": "string" },
+    "version_id": { "type": "string" },
+    "datasetVersionId": { "type": "string" },
+    "active": { "type": "boolean" },
+    "text": { "type": "string", "minLength": 1 },
+    "vector": {
+      "type": "array",
+      "items": { "type": "number" }
+    },
+    "embedding_model": { "type": "string" },
+    "sourceUri": { "type": "string" },
+    "sourceParts": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["path", "partNumber"],
+        "properties": {
+          "path": { "type": "string" },
+          "partNumber": { "type": "integer", "minimum": 1 },
+          "size": { "type": "integer", "minimum": 0 },
+          "sha256": { "type": "string" }
+        },
+        "additionalProperties": true
+      }
+    },
+    "page_start": { "type": "integer", "minimum": 1 },
+    "page_end": { "type": "integer", "minimum": 1 },
+    "metadata": {
+      "type": "object",
+      "additionalProperties": true
+    },
+    "quality": {
+      "type": "object",
+      "properties": {
+        "score": { "type": "number", "minimum": 0, "maximum": 100 },
+        "tier": { "enum": ["primary", "weighted", "review", "archive"] },
+        "lifecycle": { "enum": ["active", "review", "archive"] },
+        "writeEnabled": { "type": "boolean" },
+        "reasons": {
+          "type": "array",
+          "items": { "type": "string" }
+        },
+        "retrievalWeight": { "type": "number", "minimum": 0 }
+      },
+      "additionalProperties": true
+    },
+    "created_at": { "type": "string" }
+  },
+  "additionalProperties": false
+}

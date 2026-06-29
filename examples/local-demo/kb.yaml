@@ -1,0 +1,98 @@
+kind: knowmesh.knowledgeBase
+apiVersion: v1
+
+project:
+  id: local-demo
+  name: KnowMesh Local Demo
+  language: zh-CN
+  description: Credential-free local demo for the KnowMesh scan and build-plan kernel.
+
+workspace:
+  root: ./workspace/local-demo
+  artifactRoot: ./workspace/local-demo/artifacts
+  manifests: ./workspace/local-demo/manifests
+
+source:
+  type: filesystem
+  root: ./documents
+  include:
+    - "**/*.pdf"
+    - "**/*.pdf.*"
+    - "**/*.md"
+    - "**/*.txt"
+  splitPdf:
+    mergeParts: true
+    partPattern: ".pdf.N"
+    orderBy: partNumber
+    sourcePartsField: sourceParts
+
+storage:
+  provider: local-filesystem
+  prefixes:
+    raw: raw/
+    merged: merged/
+    ocr: ocr/
+    normalized: normalized/
+    chunks: chunks/
+    reports: reports/
+
+models:
+  ocr:
+    provider: disabled
+    model: none
+    mode: plan
+  embedding:
+    provider: disabled
+    model: none
+    mode: plan
+    dimensions: 0
+
+vector:
+  provider: disabled
+  index: none
+  dimensions: 0
+  namespace: local-demo
+
+metadata:
+  required:
+    - document_id
+    - version_id
+    - title
+    - page_number
+    - chunk_id
+    - source_uri
+  filters:
+    - active
+    - title
+
+chunking:
+  targetTokens: 450
+  maxTokens: 800
+  overlapTokens: 80
+  preservePageBoundary: true
+
+normalization:
+  keepRawOcr: true
+  cleanTextForEmbedding: true
+  removeRepeatedHeadersFooters: true
+  removePageNumbers: true
+  removeWatermarks: true
+  normalizeWhitespace: true
+  keepTablesAsMarkdown: true
+
+versioning:
+  strategy: manifest-active-version
+  activeManifest: ./workspace/local-demo/manifests/active.json
+  retirePreviousVersionsByDefault: true
+
+quality:
+  minOcrTextLengthPerPage: 20
+  minChunkChars: 80
+  requireCitation: true
+  reportFailures: true
+  failurePolicy: record-and-continue
+
+runtime:
+  uploadConcurrency: 1
+  ocrConcurrency: 1
+  embeddingConcurrency: 1

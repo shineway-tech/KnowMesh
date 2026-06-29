@@ -1,0 +1,47 @@
+{
+  "name": "knowmesh",
+  "version": "0.1.0",
+  "private": false,
+  "description": "KnowMesh / 知络: local-first Web Console for building auditable knowledge bases.",
+  "keywords": [
+    "knowledge-base",
+    "local-first",
+    "rag",
+    "sqlite",
+    "aliyun",
+    "education"
+  ],
+  "homepage": "https://github.com/shineway-tech/KnowMesh#readme",
+  "bugs": {
+    "url": "https://github.com/shineway-tech/KnowMesh/issues"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/shineway-tech/KnowMesh.git"
+  },
+  "author": "Shineway Tech",
+  "type": "module",
+  "license": "MIT",
+  "engines": {
+    "node": ">=20"
+  },
+  "bin": {
+    "knowmesh": "./src/cli/knowmesh.mjs"
+  },
+  "scripts": {
+    "start": "node ./src/cli/knowmesh.mjs start",
+    "smoke:release": "node ./scripts/release-smoke.mjs",
+    "verify:package-boundary": "node ./scripts/verify-package-boundary.mjs",
+    "doctor": "node ./src/cli/knowmesh.mjs doctor --config examples/local-demo/kb.yaml",
+    "doctor:textbook": "node ./src/cli/knowmesh.mjs doctor --config examples/textbook-cn-k12/kb.yaml --cloud",
+    "config": "node ./src/cli/knowmesh.mjs config",
+    "scan": "node ./src/cli/knowmesh.mjs scan",
+    "plan": "node ./src/cli/knowmesh.mjs plan",
+    "demo:plan": "node ./src/cli/knowmesh.mjs plan --config examples/local-demo/kb.yaml --write",
+    "test": "node --test"
+  },
+  "dependencies": {
+    "better-sqlite3": "^12.11.1",
+    "yaml": "^2.7.0"
+  }
+}

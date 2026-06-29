@@ -1,0 +1,25 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://knowmesh.local/schemas/kb.schema.json",
+  "title": "KnowMeshKnowledgeBaseConfig",
+  "type": "object",
+  "required": ["kind", "apiVersion", "project", "source", "storage", "models", "vector"],
+  "properties": {
+    "kind": { "const": "knowmesh.knowledgeBase" },
+    "apiVersion": { "type": "string" },
+    "project": { "type": "object" },
+    "workspace": { "type": "object" },
+    "source": { "type": "object" },
+    "storage": { "type": "object" },
+    "models": { "type": "object" },
+    "vector": { "type": "object" },
+    "metadata": { "type": "object" },
+    "chunking": { "type": "object" },
+    "normalization": { "type": "object" },
+    "versioning": { "type": "object" },
+    "quality": { "type": "object" },
+    "runtime": { "type": "object" }
+  },
+  "additionalProperties": true
+}
+

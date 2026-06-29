@@ -1,0 +1,77 @@
+kind: knowmesh.knowledgeBase
+apiVersion: v1
+
+project:
+  id: example-kb
+  name: Example Knowledge Base
+  language: zh-CN
+
+workspace:
+  root: ${KNOWMESH_WORKSPACE}
+  artifactRoot: ${KNOWMESH_WORKSPACE}/artifacts
+
+source:
+  type: filesystem
+  root: ./documents
+  include:
+    - "**/*.pdf"
+    - "**/*.docx"
+    - "**/*.txt"
+    - "**/*.md"
+  splitPdf:
+    mergeParts: true
+    partPattern: ".pdf.N"
+    orderBy: partNumber
+
+storage:
+  provider: aliyun-oss
+  region: ${ALIYUN_REGION}
+  bucket: ${ALIYUN_OSS_BUCKET}
+  endpoint: ${ALIYUN_OSS_ENDPOINT}
+  profile: ${ALIYUN_OSS_PROFILE}
+  prefixes:
+    raw: raw/
+    renderedPages: pages/
+    ocr: ocr/
+    normalized: normalized/
+    reports: reports/
+
+models:
+  ocr:
+    provider: qwen
+    model: ${KNOWMESH_OCR_MODEL}
+    mode: batch
+  embedding:
+    provider: qwen
+    model: ${KNOWMESH_EMBEDDING_MODEL}
+    mode: batch
+    dimensions: 1024
+
+vector:
+  provider: aliyun-vector-bucket
+  bucket: ${ALIYUN_VECTOR_BUCKET}
+  index: ${ALIYUN_VECTOR_INDEX}
+  dimensions: 1024
+
+chunking:
+  targetTokens: 450
+  maxTokens: 800
+  overlapTokens: 80
+  preservePageBoundary: true
+
+normalization:
+  keepRawOcr: true
+  removeRepeatedHeadersFooters: true
+  removePageNumbers: true
+  normalizeWhitespace: true
+
+versioning:
+  strategy: manifest-active-version
+  activeManifest: ${KNOWMESH_WORKSPACE}/manifests/active.json
+  retirePreviousVersionsByDefault: true
+
+quality:
+  minOcrTextLengthPerPage: 20
+  minChunkChars: 80
+  requireCitation: true
+

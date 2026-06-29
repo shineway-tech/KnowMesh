@@ -1,0 +1,35 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://knowmesh.local/schemas/document-manifest.schema.json",
+  "title": "KnowMeshDocumentManifest",
+  "type": "object",
+  "required": ["kind", "apiVersion", "generatedAt", "project", "documents"],
+  "properties": {
+    "kind": { "const": "knowmesh.documentManifest" },
+    "apiVersion": { "type": "string" },
+    "generatedAt": { "type": "string" },
+    "project": { "type": "object", "required": ["id"] },
+    "documents": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["document_id", "version_id", "title", "active", "lifecycle", "sourceType", "sourceUri", "sourceParts", "artifacts", "pipeline"],
+        "properties": {
+          "document_id": { "type": "string" },
+          "version_id": { "type": "string" },
+          "title": { "type": "string" },
+          "active": { "type": "boolean" },
+          "lifecycle": { "type": "string" },
+          "sourceType": { "type": "string" },
+          "sourceUri": { "type": "string" },
+          "sourceParts": { "type": "array" },
+          "artifacts": { "type": "object" },
+          "pipeline": { "type": "array" },
+          "indexRecordTemplate": { "type": "object" }
+        },
+        "additionalProperties": true
+      }
+    }
+  },
+  "additionalProperties": false
+}

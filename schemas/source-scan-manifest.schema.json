@@ -1,0 +1,73 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://knowmesh.local/schemas/source-scan-manifest.schema.json",
+  "title": "KnowMeshSourceScanManifest",
+  "type": "object",
+  "required": ["kind", "apiVersion", "generatedAt", "project", "source", "workspace", "files", "logicalDocuments"],
+  "properties": {
+    "kind": { "const": "knowmesh.sourceScanManifest" },
+    "apiVersion": { "type": "string" },
+    "generatedAt": { "type": "string" },
+    "project": { "type": "object", "required": ["id"] },
+    "source": { "type": "object", "required": ["type", "root", "include"] },
+    "workspace": { "type": "object", "required": ["root", "artifactRoot", "manifests"] },
+    "files": {
+      "type": "object",
+      "required": ["scanned", "included"],
+      "properties": {
+        "scanned": { "type": "integer", "minimum": 0 },
+        "included": { "type": "integer", "minimum": 0 }
+      }
+    },
+    "splitPdfGroups": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["logicalRelativePath", "partCount", "sourceParts"]
+      }
+    },
+    "logicalDocuments": {
+      "type": "array",
+      "items": { "$ref": "#/$defs/logicalDocument" }
+    },
+    "warnings": { "type": "array" }
+  },
+  "$defs": {
+    "sourcePart": {
+      "type": "object",
+      "required": ["path", "relativePath", "size", "sha256"],
+      "properties": {
+        "path": { "type": "string" },
+        "uri": { "type": "string" },
+        "relativePath": { "type": "string" },
+        "partNumber": { "type": "integer", "minimum": 1 },
+        "size": { "type": "integer", "minimum": 0 },
+        "sha256": { "type": "string" }
+      },
+      "additionalProperties": false
+    },
+    "logicalDocument": {
+      "type": "object",
+      "required": ["document_id", "version_id", "title", "sourceType", "sourceUri", "relativePath", "source_fingerprint", "sourceParts", "merge", "active", "lifecycle"],
+      "properties": {
+        "document_id": { "type": "string" },
+        "version_id": { "type": "string" },
+        "title": { "type": "string" },
+        "sourceType": { "type": "string" },
+        "sourceUri": { "type": "string" },
+        "sourcePath": { "type": "string" },
+        "relativePath": { "type": "string" },
+        "source_fingerprint": { "type": "string" },
+        "sourceParts": {
+          "type": "array",
+          "items": { "$ref": "#/$defs/sourcePart" }
+        },
+        "merge": { "type": "object" },
+        "active": { "type": "boolean" },
+        "lifecycle": { "type": "string" }
+      },
+      "additionalProperties": true
+    }
+  },
+  "additionalProperties": false
+}

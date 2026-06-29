@@ -1,0 +1,12 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="128" height="128" viewBox="0 0 128 128" role="img" aria-labelledby="title desc">
+  <title id="title">KnowMesh mark</title>
+  <desc id="desc">A K-shaped knowledge mesh mark with a vertical spine, a central hub, and three connected branches.</desc>
+  <path d="M36 24v80" fill="none" stroke="#18202A" stroke-width="8" stroke-linecap="round"/>
+  <path d="M44 64 88 30M44 64h50M44 64l44 34" fill="none" stroke="#18202A" stroke-width="8" stroke-linecap="round"/>
+  <circle cx="36" cy="24" r="10" fill="#18202A"/>
+  <circle cx="36" cy="104" r="10" fill="#18202A"/>
+  <circle cx="44" cy="64" r="16" fill="#18A999"/>
+  <circle cx="88" cy="30" r="11" fill="#18A999"/>
+  <circle cx="94" cy="64" r="11" fill="#F2B84B"/>
+  <circle cx="88" cy="98" r="11" fill="#18A999"/>
+</svg>

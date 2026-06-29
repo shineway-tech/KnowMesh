@@ -1,0 +1,155 @@
+#!/usr/bin/env sh
+set -eu
+
+NODE_VERSION="${KNOWMESH_NODE_VERSION:-v22.16.0}"
+MIN_NODE_MAJOR=20
+
+log() {
+  printf '[KnowMesh] %s\n' "$*"
+}
+
+project_root() {
+  if [ "${KNOWMESH_PROJECT_ROOT:-}" ]; then
+    cd "$KNOWMESH_PROJECT_ROOT"
+    pwd
+    return
+  fi
+
+  script_dir=$(CDPATH= cd -- "$(dirname -- "$0")" && pwd)
+  if [ -f "$script_dir/../package.json" ]; then
+    cd "$script_dir/.."
+    pwd
+    return
+  fi
+  if [ -f "$script_dir/package.json" ]; then
+    cd "$script_dir"
+    pwd
+    return
+  fi
+
+  printf 'Cannot find KnowMesh project root. Set KNOWMESH_PROJECT_ROOT and retry.\n' >&2
+  exit 1
+}
+
+runtime_root() {
+  if [ "${KNOWMESH_RUNTIME_DIR:-}" ]; then
+    printf '%s\n' "$KNOWMESH_RUNTIME_DIR"
+  else
+    printf '%s\n' "$HOME/.knowmesh/runtime"
+  fi
+}
+
+detect_os() {
+  case "$(uname -s)" in
+    Darwin) printf 'darwin\n' ;;
+    Linux) printf 'linux\n' ;;
+    *) printf 'Unsupported operating system: %s\n' "$(uname -s)" >&2; exit 1 ;;
+  esac
+}
+
+detect_arch() {
+  case "$(uname -m)" in
+    x86_64|amd64) printf 'x64\n' ;;
+    arm64|aarch64) printf 'arm64\n' ;;
+    *) printf 'Unsupported CPU architecture: %s\n' "$(uname -m)" >&2; exit 1 ;;
+  esac
+}
+
+test_node_version() {
+  node_path="$1"
+  version="$("$node_path" --version 2>/dev/null || true)"
+  [ -n "$version" ] || return 1
+  major=$(printf '%s' "$version" | sed 's/^v//' | cut -d. -f1)
+  [ "$major" -ge "$MIN_NODE_MAJOR" ] 2>/dev/null
+}
+
+system_node() {
+  if command -v node >/dev/null 2>&1 && test_node_version "$(command -v node)"; then
+    command -v node
+    return 0
+  fi
+  return 1
+}
+
+download_file() {
+  url="$1"
+  out="$2"
+  if command -v curl >/dev/null 2>&1; then
+    curl -fsSL "$url" -o "$out"
+    return
+  fi
+  if command -v wget >/dev/null 2>&1; then
+    wget -q "$url" -O "$out"
+    return
+  fi
+  printf 'Need curl or wget to download the KnowMesh private runtime.\n' >&2
+  exit 1
+}
+
+install_knowmesh_node() {
+  os_name=$(detect_os)
+  arch=$(detect_arch)
+  root=$(runtime_root)
+  node_dir="$root/node/$NODE_VERSION-$os_name-$arch"
+  node_bin="$node_dir/bin/node"
+  if test_node_version "$node_bin"; then
+    printf '%s\n' "$node_bin"
+    return
+  fi
+  if [ -e "$node_dir" ]; then
+    printf 'Found an incomplete KnowMesh Node runtime at %s. Remove it and retry.\n' "$node_dir" >&2
+    exit 1
+  fi
+
+  mkdir -p "$root/downloads"
+  archive="node-$NODE_VERSION-$os_name-$arch.tar.xz"
+  archive_path="$root/downloads/$archive"
+  url="https://nodejs.org/dist/$NODE_VERSION/$archive"
+  log "Downloading private Node runtime: $url"
+  download_file "$url" "$archive_path"
+
+  extract_root="$root/extract-$$"
+  mkdir -p "$extract_root"
+  tar -xJf "$archive_path" -C "$extract_root"
+  expanded=$(find "$extract_root" -mindepth 1 -maxdepth 1 -type d | head -n 1)
+  [ -n "$expanded" ] || { printf 'Node runtime archive did not contain an extracted directory.\n' >&2; exit 1; }
+  mv "$expanded" "$node_dir"
+  test_node_version "$node_bin" || { printf 'Installed Node runtime is not usable: %s\n' "$node_bin" >&2; exit 1; }
+  printf '%s\n' "$node_bin"
+}
+
+node_path() {
+  if node_bin=$(system_node); then
+    log "Using system Node: $node_bin" >&2
+    printf '%s\n' "$node_bin"
+    return
+  fi
+  log "System Node.js $MIN_NODE_MAJOR+ was not found. Installing a private runtime." >&2
+  install_knowmesh_node
+}
+
+ensure_node_modules() {
+  root="$1"
+  node_bin="$2"
+  if [ -f "$root/node_modules/yaml/package.json" ]; then
+    return
+  fi
+  npm_bin="$(dirname "$node_bin")/npm"
+  if [ ! -x "$npm_bin" ]; then
+    npm_bin=$(command -v npm || true)
+  fi
+  [ -n "$npm_bin" ] || { printf 'npm was not found next to Node. Reinstall the KnowMesh private runtime.\n' >&2; exit 1; }
+  log "Installing KnowMesh dependencies with $npm_bin"
+  (cd "$root" && "$npm_bin" install --omit=dev)
+}
+
+root=$(project_root)
+node_bin=$(node_path)
+ensure_node_modules "$root" "$node_bin"
+
+if [ "$#" -eq 0 ]; then
+  set -- start
+fi
+
+log "Starting KnowMesh Web Console"
+exec "$node_bin" "$root/src/cli/knowmesh.mjs" "$@"
