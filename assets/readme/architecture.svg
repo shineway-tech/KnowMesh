@@ -7,72 +7,66 @@
     <filter id="shadow" x="-20%" y="-20%" width="140%" height="140%">
       <feDropShadow dx="0" dy="14" stdDeviation="16" flood-color="#0f172a" flood-opacity="0.12"/>
     </filter>
-    <marker id="flow-arrow" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="8" markerHeight="8" orient="auto">
-      <path d="M0 0L10 5L0 10Z" fill="#2563eb"/>
-    </marker>
   </defs>
 
   <rect width="1600" height="760" rx="32" fill="url(#bg)"/>
   <text x="92" y="92" font-family="Segoe UI, Microsoft YaHei UI, Arial, sans-serif" font-size="44" font-weight="760" fill="#102326">How KnowMesh Compiles a Knowledge Asset</text>
   <text x="92" y="136" font-family="Segoe UI, Microsoft YaHei UI, Arial, sans-serif" font-size="23" font-weight="520" fill="#526879">A legible runtime path: files become cataloged, quality-gated, versioned, and queryable knowledge.</text>
 
-  <g transform="translate(60 220)" font-family="Segoe UI, Microsoft YaHei UI, Arial, sans-serif">
+  <g transform="translate(70 220)" font-family="Segoe UI, Microsoft YaHei UI, Arial, sans-serif">
     <g>
-      <rect x="0" y="0" width="242" height="250" rx="28" fill="#ffffff" stroke="#b7d3ce" filter="url(#shadow)"/>
-      <circle cx="42" cy="48" r="16" fill="#10b981"/>
-      <text x="72" y="57" font-size="24" font-weight="740" fill="#102326">Source Folder</text>
-      <text x="28" y="112" font-size="19" fill="#405766">PDF, Office, WPS</text>
-      <text x="28" y="146" font-size="19" fill="#405766">images and scans</text>
-      <text x="28" y="180" font-size="19" fill="#405766">split files and risks</text>
-      <path d="M28 210H180" stroke="#10b981" stroke-width="7" stroke-linecap="round"/>
+      <rect x="0" y="0" width="220" height="250" rx="26" fill="#ffffff" stroke="#b7d3ce" filter="url(#shadow)"/>
+      <circle cx="38" cy="48" r="15" fill="#10b981"/>
+      <text x="66" y="45" font-size="16" font-weight="740" fill="#10b981">01</text>
+      <text x="66" y="76" font-size="25" font-weight="740" fill="#102326">Source</text>
+      <text x="28" y="124" font-size="17" fill="#405766">PDF, Office, WPS</text>
+      <text x="28" y="156" font-size="17" fill="#405766">images and scans</text>
+      <text x="28" y="188" font-size="17" fill="#405766">split-file risks</text>
+      <path d="M28 214H172" stroke="#10b981" stroke-width="7" stroke-linecap="round"/>
     </g>
 
-    <path d="M260 125H288" stroke="#2563eb" stroke-width="5" marker-end="url(#flow-arrow)"/>
-
-    <g transform="translate(306 0)">
-      <rect x="0" y="0" width="242" height="250" rx="28" fill="#ffffff" stroke="#bfd2ef" filter="url(#shadow)"/>
-      <circle cx="42" cy="48" r="16" fill="#2563eb"/>
-      <text x="72" y="57" font-size="24" font-weight="740" fill="#102326">Catalog</text>
-      <text x="28" y="112" font-size="19" fill="#405766">workspace.sqlite</text>
-      <text x="28" y="146" font-size="19" fill="#405766">catalog.sqlite</text>
-      <text x="28" y="180" font-size="19" fill="#405766">artifact paths</text>
-      <path d="M28 210H180" stroke="#2563eb" stroke-width="7" stroke-linecap="round"/>
+    <g transform="translate(290 0)">
+      <rect x="0" y="0" width="220" height="250" rx="26" fill="#ffffff" stroke="#bfd2ef" filter="url(#shadow)"/>
+      <circle cx="38" cy="48" r="15" fill="#2563eb"/>
+      <text x="66" y="45" font-size="16" font-weight="740" fill="#2563eb">02</text>
+      <text x="66" y="76" font-size="25" font-weight="740" fill="#102326">Catalog</text>
+      <text x="28" y="124" font-size="17" fill="#405766">workspace.sqlite</text>
+      <text x="28" y="156" font-size="17" fill="#405766">catalog.sqlite</text>
+      <text x="28" y="188" font-size="17" fill="#405766">artifact paths</text>
+      <path d="M28 214H172" stroke="#2563eb" stroke-width="7" stroke-linecap="round"/>
     </g>
 
-    <path d="M566 125H594" stroke="#2563eb" stroke-width="5" marker-end="url(#flow-arrow)"/>
-
-    <g transform="translate(612 0)">
-      <rect x="0" y="0" width="242" height="250" rx="28" fill="#ffffff" stroke="#f3c986" filter="url(#shadow)"/>
-      <circle cx="42" cy="48" r="16" fill="#f59e0b"/>
-      <text x="72" y="57" font-size="24" font-weight="740" fill="#102326">Quality Gates</text>
-      <text x="28" y="112" font-size="19" fill="#405766">review queues</text>
-      <text x="28" y="146" font-size="19" fill="#405766">evaluations</text>
-      <text x="28" y="180" font-size="19" fill="#405766">citation checks</text>
-      <path d="M28 210H180" stroke="#f59e0b" stroke-width="7" stroke-linecap="round"/>
+    <g transform="translate(580 0)">
+      <rect x="0" y="0" width="220" height="250" rx="26" fill="#ffffff" stroke="#f3c986" filter="url(#shadow)"/>
+      <circle cx="38" cy="48" r="15" fill="#f59e0b"/>
+      <text x="66" y="45" font-size="16" font-weight="740" fill="#f59e0b">03</text>
+      <text x="66" y="76" font-size="25" font-weight="740" fill="#102326">Quality</text>
+      <text x="28" y="124" font-size="17" fill="#405766">review queues</text>
+      <text x="28" y="156" font-size="17" fill="#405766">evaluations</text>
+      <text x="28" y="188" font-size="17" fill="#405766">citation checks</text>
+      <path d="M28 214H172" stroke="#f59e0b" stroke-width="7" stroke-linecap="round"/>
     </g>
 
-    <path d="M872 125H900" stroke="#2563eb" stroke-width="5" marker-end="url(#flow-arrow)"/>
-
-    <g transform="translate(918 0)">
-      <rect x="0" y="0" width="242" height="250" rx="28" fill="#ffffff" stroke="#e9b8d0" filter="url(#shadow)"/>
-      <circle cx="42" cy="48" r="16" fill="#db2777"/>
-      <text x="72" y="57" font-size="24" font-weight="740" fill="#102326">Versioned Asset</text>
-      <text x="28" y="112" font-size="19" fill="#405766">releases</text>
-      <text x="28" y="146" font-size="19" fill="#405766">rollback</text>
-      <text x="28" y="180" font-size="19" fill="#405766">sidecars</text>
-      <path d="M28 210H180" stroke="#db2777" stroke-width="7" stroke-linecap="round"/>
+    <g transform="translate(870 0)">
+      <rect x="0" y="0" width="220" height="250" rx="26" fill="#ffffff" stroke="#e9b8d0" filter="url(#shadow)"/>
+      <circle cx="38" cy="48" r="15" fill="#db2777"/>
+      <text x="66" y="45" font-size="16" font-weight="740" fill="#db2777">04</text>
+      <text x="66" y="76" font-size="25" font-weight="740" fill="#102326">Version</text>
+      <text x="28" y="124" font-size="17" fill="#405766">releases</text>
+      <text x="28" y="156" font-size="17" fill="#405766">rollback</text>
+      <text x="28" y="188" font-size="17" fill="#405766">sidecars</text>
+      <path d="M28 214H172" stroke="#db2777" stroke-width="7" stroke-linecap="round"/>
     </g>
 
-    <path d="M1178 125H1206" stroke="#2563eb" stroke-width="5" marker-end="url(#flow-arrow)"/>
-
-    <g transform="translate(1224 0)">
-      <rect x="0" y="0" width="242" height="250" rx="28" fill="#ffffff" stroke="#adceff" filter="url(#shadow)"/>
-      <circle cx="42" cy="48" r="16" fill="#4f46e5"/>
-      <text x="72" y="57" font-size="24" font-weight="740" fill="#102326">Query Runtime</text>
-      <text x="28" y="112" font-size="19" fill="#405766">cited answers</text>
-      <text x="28" y="146" font-size="19" fill="#405766">feedback actions</text>
-      <text x="28" y="180" font-size="19" fill="#405766">integration APIs</text>
-      <path d="M28 210H180" stroke="#4f46e5" stroke-width="7" stroke-linecap="round"/>
+    <g transform="translate(1160 0)">
+      <rect x="0" y="0" width="220" height="250" rx="26" fill="#ffffff" stroke="#adceff" filter="url(#shadow)"/>
+      <circle cx="38" cy="48" r="15" fill="#4f46e5"/>
+      <text x="66" y="45" font-size="16" font-weight="740" fill="#4f46e5">05</text>
+      <text x="66" y="76" font-size="25" font-weight="740" fill="#102326">Query</text>
+      <text x="28" y="124" font-size="17" fill="#405766">cited answers</text>
+      <text x="28" y="156" font-size="17" fill="#405766">feedback actions</text>
+      <text x="28" y="188" font-size="17" fill="#405766">integration APIs</text>
+      <path d="M28 214H172" stroke="#4f46e5" stroke-width="7" stroke-linecap="round"/>
     </g>
   </g>
 
