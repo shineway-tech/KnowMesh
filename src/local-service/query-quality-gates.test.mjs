@@ -34,6 +34,23 @@ test("query quality gates block weak answers and display serialization leaks", (
 
   assert.equal(gates.find((gate) => gate.key === "scopeFit").status, "review");
   assert.equal(gates.find((gate) => gate.key === "citationTraceability").status, "fail");
+  assert.equal(gates.find((gate) => gate.key === "citationSupportsAnswer").status, "fail");
   assert.equal(gates.find((gate) => gate.key === "noWeakAnswer").status, "fail");
   assert.equal(gates.find((gate) => gate.key === "displaySerialization").status, "fail");
+});
+
+test("query quality gates prevent out-of-scope citation leakage", () => {
+  const gates = evaluateQueryQualityGates({
+    status: "out_of_scope",
+    answer: "",
+    citations: [{
+      document_id: "doc-policy",
+      sourceUri: "制度/员工手册.pdf",
+      pageNumber: 12,
+      excerpt: "报销制度"
+    }]
+  });
+
+  assert.equal(gates.find((gate) => gate.key === "noOutOfScopeLeakage").status, "fail");
+  assert.equal(gates.find((gate) => gate.key === "citationSupportsAnswer").status, "fail");
 });

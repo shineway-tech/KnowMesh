@@ -13,6 +13,7 @@ import {
 } from "../core/source-types.mjs";
 import { getTemplate } from "../core/templates.mjs";
 import { applyDocumentOverridesToManifest } from "./document-inventory.mjs";
+import { buildSourcePreparationPlan } from "./execution/parser-provider.mjs";
 import { syncSourceManifestToCatalog } from "./source-catalog.mjs";
 
 const defaultTemplateId = "textbook-cn-k12";
@@ -23,6 +24,8 @@ export async function previewScan(state, options = {}) {
     workspaceRoot: scan.workspaceRoot
   });
   const fixes = buildScanFixes(scan);
+  const sourcePreparation = buildScanSourcePreparation(scan, state);
+  const intakeDiagnostics = buildIntakeDiagnostics(scan, sourcePreparation);
   const sourceWarnings = buildSourceTypeWarnings(scan);
   const warnings = [...scan.manifest.warnings, ...sourceWarnings];
   const checks = [
@@ -100,7 +103,9 @@ export async function previewScan(state, options = {}) {
       })),
       processingGroups: summarizeProcessingGroups(scan.manifest),
       warnings: warnings.slice(0, 8).map(localizeWarning),
-      issueGroups: buildScanIssueGroups(scan, fixes)
+      issueGroups: buildScanIssueGroups(scan, fixes, sourcePreparation),
+      sourcePreparation,
+      intakeDiagnostics
     }
   };
 }
@@ -295,6 +300,121 @@ function buildSourceTypeWarnings(scan) {
   return warnings;
 }
 
+function buildScanSourcePreparation(scan, state = {}) {
+  const documents = [
+    ...(scan.manifest.logicalDocuments || []).map((document) => ({
+      relativePath: document.relativePath || "",
+      sourceType: document.sourceType || "",
+      extractionState: document.extractionState || ""
+    })),
+    ...(scan.manifest.unsupportedFiles || []).map((file) => ({
+      relativePath: file.relativePath || "",
+      sourceType: file.sourceType || "file",
+      extractionState: "unsupported"
+    }))
+  ];
+  return buildSourcePreparationPlan(documents, {
+    mode: scan.mode,
+    localOcrConfigured: localOcrConfigured(state),
+    converterAvailable: compatibilityConverterAvailable(state)
+  });
+}
+
+function buildIntakeDiagnostics(scan, sourcePreparation) {
+  const reviewQueue = sourcePreparation.documents
+    .filter((document) => document.review?.status === "review" || ["blocked", "dryRunRequired"].includes(document.status))
+    .map(intakeReviewItem);
+  const rejectedFiles = (scan.manifest.unsupportedFiles || []).map((file) => ({
+    relativePath: file.relativePath || "",
+    sourceType: file.sourceType || "file",
+    reason: file.reason || "unsupported_source_type",
+    size: Number(file.size || 0)
+  }));
+  const unsafeSourceClasses = sourcePreparation.documents
+    .filter((document) => document.macroPolicy?.macroCapable)
+    .map((document) => ({
+      relativePath: document.relativePath,
+      sourceType: document.sourceType,
+      macroPolicy: document.macroPolicy,
+      review: document.review || { status: "", reason: "" }
+    }));
+
+  return {
+    kind: "knowmesh.localDocumentIntakeDiagnostics",
+    apiVersion: "1.0.0",
+    status: reviewQueue.length || rejectedFiles.length || unsafeSourceClasses.length ? "review" : "pass",
+    mode: scan.mode,
+    summary: {
+      totalSourceFiles: Number(scan.manifest.files?.scanned || 0),
+      supportedFiles: Number(scan.manifest.files?.supported || 0),
+      rejectedFiles: rejectedFiles.length,
+      reviewRequired: reviewQueue.length,
+      directText: sourcePreparation.summary.directText,
+      office: sourcePreparation.summary.office,
+      autoConvert: sourcePreparation.summary.autoConvert,
+      ocr: sourcePreparation.summary.ocr,
+      unsupported: sourcePreparation.summary.unsupported,
+      plannedExternalCalls: sourcePreparation.summary.plannedExternalCalls,
+      externalCallsBeforeExecution: sourcePreparation.summary.externalCallsBeforeExecution
+    },
+    adapterBoundaries: sourcePreparation.adapters.map((adapter) => ({
+      id: adapter.id,
+      kind: adapter.kind,
+      status: adapter.status,
+      storageBoundary: adapter.storageBoundary,
+      externalCallsBeforeExecution: adapter.externalCallsBeforeExecution
+    })),
+    reviewQueue,
+    rejectedFiles,
+    unsafeSourceClasses,
+    externalCallsBeforeExecution: sourcePreparation.summary.externalCallsBeforeExecution,
+    plannedExternalCalls: sourcePreparation.summary.plannedExternalCalls,
+    privacy: {
+      redacted: true,
+      excludes: ["sourceContent", "documentText", "localAbsolutePaths", "credentials"]
+    }
+  };
+}
+
+function intakeReviewItem(document) {
+  return {
+    relativePath: document.relativePath,
+    sourceType: document.sourceType,
+    category: document.category,
+    adapterId: document.adapterId,
+    status: document.status,
+    review: document.review || { status: "", reason: "" },
+    userFixableErrors: document.userFixableErrors || [],
+    nextAction: document.nextAction || null,
+    externalCallsBeforeExecution: Number(document.externalCallsBeforeExecution || 0)
+  };
+}
+
+function localOcrConfigured(state = {}) {
+  return Boolean(state.localOcrRecognizer || state.localOcrCommand || process.env.KNOWMESH_LOCAL_OCR_COMMAND);
+}
+
+function compatibilityConverterAvailable(state = {}) {
+  if (state.converterAvailable !== undefined) return Boolean(state.converterAvailable);
+  if (Array.isArray(state.compatibilityConverters) && state.compatibilityConverters.some((item) => item?.command)) return true;
+  if (state.enableSystemConverters === false) return false;
+  return commandExistsOnPath(["soffice", "libreoffice"]);
+}
+
+function commandExistsOnPath(commands) {
+  const pathEntries = String(process.env.PATH || process.env.Path || "").split(path.delimiter).filter(Boolean);
+  const extensions = process.platform === "win32" ? ["", ".exe", ".cmd", ".bat"] : [""];
+  for (const dir of pathEntries) {
+    for (const command of commands) {
+      for (const extension of extensions) {
+        const candidate = path.join(dir, `${command}${extension}`);
+        if (fs.existsSync(candidate)) return true;
+      }
+    }
+  }
+  return false;
+}
+
 export function localizeWarning(warning) {
   if (warning.code === "split_pdf_missing_part") {
     return {
@@ -363,7 +483,7 @@ function buildScanFixes(scan) {
   return fixes;
 }
 
-function buildScanIssueGroups(scan, fixes) {
+function buildScanIssueGroups(scan, fixes, sourcePreparation = { documents: [] }) {
   const warnings = [...scan.manifest.warnings, ...buildSourceTypeWarnings(scan)].slice(0, 8).map(localizeWarning);
   const blockerItems = fixes.map((item) => ({
     key: item.key,
@@ -393,6 +513,9 @@ function buildScanIssueGroups(scan, fixes) {
     warning.message.zh,
     warning.message.en
   ));
+  for (const item of sourcePreparationReviewItems(sourcePreparation).slice(0, 8)) {
+    reviewItems.push(item);
+  }
 
   if (scan.summary.splitPdfGroups > 0) {
     reviewItems.push(issueItem(
@@ -475,6 +598,28 @@ function buildScanIssueGroups(scan, fixes) {
       readyItems
     )
   ];
+}
+
+function sourcePreparationReviewItems(sourcePreparation) {
+  return (sourcePreparation.documents || [])
+    .filter((document) => document.review?.status === "review" || ["blocked", "dryRunRequired"].includes(document.status))
+    .map((document) => issueItem(
+      `intake:${document.relativePath}`,
+      "warn",
+      "摄取诊断",
+      "Intake",
+      intakeReviewMessage(document, "zh"),
+      intakeReviewMessage(document, "en")
+    ));
+}
+
+function intakeReviewMessage(document, lang) {
+  const pathLabel = document.relativePath || document.sourceType || "source";
+  if (document.review?.reason) return `${pathLabel}: ${document.review.reason}`;
+  if (document.status === "dryRunRequired") {
+    return lang === "zh" ? `${pathLabel}: 需要先完成 dry-run。` : `${pathLabel}: dry-run is required before execution.`;
+  }
+  return lang === "zh" ? `${pathLabel}: 需要人工确认。` : `${pathLabel}: review is required.`;
 }
 
 function scopeReadyMessage(summary, lang) {

@@ -11,6 +11,7 @@ import { putVectors, queryVectors, validateVectorIndexName } from "./aliyun.mjs"
 import { syncCleanArtifactsToCatalog } from "./content-catalog.mjs";
 import { buildEmbeddingInputs } from "./local-executor.mjs";
 import { createKnowledgeBase, switchKnowledgeBase } from "./knowledge-bases.mjs";
+import { knowledgeBaseVersions } from "./knowledge-versions.mjs";
 import { saveAliyunCredentials, saveAliyunModelProvider, saveAliyunModelQuality, saveRetrievalStrategy } from "./setup-store.mjs";
 import { catalogDatabasePath } from "./storage.mjs";
 
@@ -245,6 +246,25 @@ test("local execution prepares commercial source formats and extracts local tabl
   assert.ok(cleanIssueRows.length >= filterReport.review.length);
   assert.ok(cleanIssueRows.every((row) => row.target_type === "document" && row.status === "open"));
   assert.ok(cleanIssueRows.some((row) => /兼容转换|未能读取|文字识别/.test(row.reason)));
+
+  const activeManifest = JSON.parse(fs.readFileSync(manifestPath(workspaceRoot, "active-manifest.json"), "utf8"));
+  assert.equal(activeManifest.status, "active");
+  assert.equal(activeManifest.datasetVersionId, completed.job.datasetVersionId);
+  assert.equal(activeManifest.target.provider, "local");
+  assert.equal(activeManifest.sidecar.authoritativeStore, "catalog.sqlite");
+  assert.ok(completed.job.artifacts.some((item) => item.key === "activeManifest"));
+
+  const releaseRows = readCatalogRows(state, completed.job.knowledgeBase.id, `
+    SELECT build_id, status, active
+    FROM build_versions
+    WHERE build_id = ?
+  `, [completed.job.datasetVersionId]);
+  assert.equal(releaseRows[0].status, "active");
+  assert.equal(releaseRows[0].active, 1);
+  const versions = knowledgeBaseVersions(state, { limit: 10 });
+  const currentVersion = versions.versions.find((item) => item.id === completed.job.datasetVersionId);
+  assert.equal(currentVersion.sidecar.store, "catalog.sqlite");
+  assert.equal(currentVersion.rollbackReady, false);
 });
 
 test("local execution extracts readable text from modern Office files without running macros", async () => {
@@ -1814,6 +1834,13 @@ test("aliyun ocr pauses after a batch and resumes without reprocessing completed
   assert.equal(firstRunResults.length, 1);
   assert.equal(batchTaskIds.length, 1);
   assert.ok(paused.job.events.some((item) => item.type === "checkpoint" && item.taskKey === "ocr" && item.detail?.completedItems === 1));
+  const ocrCheckpointPath = path.join(paused.job.summary.workspaceRoot, "artifacts", "checkpoints", "ocr.checkpoint.json");
+  assert.ok(fs.existsSync(ocrCheckpointPath), "ocr artifact checkpoint missing");
+  const ocrCheckpoint = JSON.parse(fs.readFileSync(ocrCheckpointPath, "utf8"));
+  assert.equal(ocrCheckpoint.stage, "ocr");
+  assert.equal(ocrCheckpoint.jobId, paused.job.id);
+  assert.equal(ocrCheckpoint.datasetVersionId, paused.job.datasetVersionId);
+  assert.equal(ocrCheckpoint.completedItems, 1);
 
   const resumed = resumeLatestJob(state);
   assert.equal(resumed.ok, true);
@@ -2719,6 +2746,13 @@ test("aliyun embedding pauses after a batch and resumes without reprocessing com
   assert.equal(firstRunRecords.length, 1);
   assert.equal(batchChunkIds.length, 1);
   assert.ok(paused.job.events.some((item) => item.type === "checkpoint" && item.taskKey === "embedding" && item.detail?.completedItems === 1));
+  const embeddingCheckpointPath = path.join(paused.job.summary.workspaceRoot, "artifacts", "checkpoints", "embedding.checkpoint.json");
+  assert.ok(fs.existsSync(embeddingCheckpointPath), "embedding artifact checkpoint missing");
+  const embeddingCheckpoint = JSON.parse(fs.readFileSync(embeddingCheckpointPath, "utf8"));
+  assert.equal(embeddingCheckpoint.stage, "embedding");
+  assert.equal(embeddingCheckpoint.jobId, paused.job.id);
+  assert.equal(embeddingCheckpoint.datasetVersionId, paused.job.datasetVersionId);
+  assert.equal(embeddingCheckpoint.completedItems, 1);
 
   const resumed = resumeLatestJob(state);
   assert.equal(resumed.ok, true);
@@ -3557,6 +3591,13 @@ test("aliyun index pauses after a batch and resumes without rewriting completed 
   assert.equal(firstRunResults.length, 1);
   assert.equal(writeChunkIds.length, 1);
   assert.ok(paused.job.events.some((item) => item.type === "checkpoint" && item.taskKey === "index" && item.detail?.completedItems === 1));
+  const indexCheckpointPath = path.join(paused.job.summary.workspaceRoot, "artifacts", "checkpoints", "index.checkpoint.json");
+  assert.ok(fs.existsSync(indexCheckpointPath), "index artifact checkpoint missing");
+  const indexCheckpoint = JSON.parse(fs.readFileSync(indexCheckpointPath, "utf8"));
+  assert.equal(indexCheckpoint.stage, "index");
+  assert.equal(indexCheckpoint.jobId, paused.job.id);
+  assert.equal(indexCheckpoint.datasetVersionId, paused.job.datasetVersionId);
+  assert.equal(indexCheckpoint.completedItems, 1);
 
   const resumed = resumeLatestJob(state);
   assert.equal(resumed.ok, true);

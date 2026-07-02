@@ -1,0 +1,45 @@
+{
+  "contractVersion": "2026-07-query-runtime.1",
+  "kind": "knowmesh.queryResult",
+  "ok": true,
+  "status": "answered",
+  "query": {
+    "evidencePack": {
+      "version": "2026-07-query-runtime.1",
+      "answerPolicy": "citation_ready_evidence_only",
+      "routeKey": "hybridRetrieval",
+      "status": "ready",
+      "items": [
+        {
+          "chunkId": "ver-public-operations:chunk:0001",
+          "citationId": "ver-public-operations:citation:0001",
+          "documentId": "doc-public-operations",
+          "documentStatus": "active",
+          "qualityState": "primary",
+          "sourceAnchor": {
+            "sourceUri": "general-docs/source/operations-handbook.md",
+            "pageNumber": 1
+          }
+        }
+      ]
+    }
+  },
+  "answer": {
+    "text": "The sample requires a weekly review cadence and rollback-ready releases. [1]"
+  },
+  "citations": [
+    {
+      "id": "ver-public-operations:citation:0001",
+      "documentId": "doc-public-operations",
+      "pageNumber": 1,
+      "sourceLabel": "Public Sample Operations Handbook"
+    }
+  ],
+  "checks": [
+    { "key": "citationTraceability", "status": "pass" }
+  ],
+  "feedback": {
+    "endpoint": "/kb/sample-general-docs/api/query/feedback",
+    "actions": ["useful", "wrong_citation", "missed_point"]
+  }
+}

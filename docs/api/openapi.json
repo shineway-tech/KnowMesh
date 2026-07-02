@@ -1,0 +1,597 @@
+{
+  "openapi": "3.1.0",
+  "info": {
+    "title": "KnowMesh Local Service API",
+    "version": "0.1.0",
+    "x-knowmesh-contract-version": "2026-07-query-runtime.1",
+    "summary": "Scoped Query Runtime, feedback, search, maintenance, package, and version APIs for local KnowMesh knowledge bases.",
+    "description": "Use scoped /kb/{knowledgeBaseId}/api paths. Console testing and external integrations call the same Query Runtime contract."
+  },
+  "servers": [
+    {
+      "url": "http://127.0.0.1:7457",
+      "description": "Default local Web Console service"
+    }
+  ],
+  "tags": [
+    {
+      "name": "Integration",
+      "description": "Versioned endpoint discovery for API consumers."
+    },
+    {
+      "name": "Query Runtime",
+      "description": "Shared answer contract for console testing and integrations."
+    },
+    {
+      "name": "Search",
+      "description": "Catalog evidence search with citation-ready filters."
+    },
+    {
+      "name": "Maintenance",
+      "description": "Diagnostics and safe maintenance exports."
+    },
+    {
+      "name": "Providers",
+      "description": "Redacted provider readiness and adapter diagnostics."
+    },
+    {
+      "name": "Package",
+      "description": "Redacted package export and import previews."
+    },
+    {
+      "name": "Versions",
+      "description": "Version manifest, diff, and rollback workflow."
+    }
+  ],
+  "paths": {
+    "/api/integration/manifest": {
+      "get": {
+        "tags": ["Integration"],
+        "summary": "Discover supported KnowMesh integration endpoints without a selected knowledge-base scope",
+        "operationId": "getIntegrationManifest",
+        "responses": {
+          "200": { "$ref": "#/components/responses/JsonResponse" }
+        }
+      }
+    },
+    "/kb/{knowledgeBaseId}/api/integration/manifest": {
+      "get": {
+        "tags": ["Integration"],
+        "summary": "Discover supported KnowMesh integration endpoints for one knowledge base",
+        "operationId": "getScopedIntegrationManifest",
+        "parameters": [{ "$ref": "#/components/parameters/KnowledgeBaseId" }],
+        "responses": {
+          "200": { "$ref": "#/components/responses/JsonResponse" }
+        }
+      }
+    },
+    "/api/integration/diagnostics": {
+      "get": {
+        "tags": ["Integration"],
+        "summary": "Read redacted integration readiness, retry policy, and localhost guidance without a selected knowledge base",
+        "operationId": "getIntegrationDiagnostics",
+        "responses": {
+          "200": { "$ref": "#/components/responses/JsonResponse" }
+        }
+      }
+    },
+    "/kb/{knowledgeBaseId}/api/integration/diagnostics": {
+      "get": {
+        "tags": ["Integration"],
+        "summary": "Read redacted integration readiness for one knowledge base",
+        "operationId": "getScopedIntegrationDiagnostics",
+        "parameters": [{ "$ref": "#/components/parameters/KnowledgeBaseId" }],
+        "responses": {
+          "200": { "$ref": "#/components/responses/JsonResponse" }
+        }
+      }
+    },
+    "/kb/{knowledgeBaseId}/api/query": {
+      "post": {
+        "tags": ["Query Runtime"],
+        "summary": "Ask the current knowledge base through Query Runtime",
+        "operationId": "queryKnowledgeBase",
+        "parameters": [{ "$ref": "#/components/parameters/KnowledgeBaseId" }],
+        "requestBody": { "$ref": "#/components/requestBodies/QueryRequest" },
+        "responses": {
+          "200": { "$ref": "#/components/responses/QueryResponse" },
+          "400": { "$ref": "#/components/responses/ErrorResponse" },
+          "409": { "$ref": "#/components/responses/ErrorResponse" }
+        }
+      }
+    },
+    "/kb/{knowledgeBaseId}/api/query/contract": {
+      "get": {
+        "tags": ["Query Runtime"],
+        "summary": "Read Query Runtime request, status, citation, and feedback contract",
+        "operationId": "getQueryRuntimeContract",
+        "parameters": [{ "$ref": "#/components/parameters/KnowledgeBaseId" }],
+        "responses": {
+          "200": { "$ref": "#/components/responses/JsonResponse" }
+        }
+      }
+    },
+    "/kb/{knowledgeBaseId}/api/query/plan": {
+      "post": {
+        "tags": ["Query Runtime"],
+        "summary": "Preview routing and evidence strategy for a question",
+        "operationId": "planQueryRoute",
+        "parameters": [{ "$ref": "#/components/parameters/KnowledgeBaseId" }],
+        "requestBody": { "$ref": "#/components/requestBodies/QueryRequest" },
+        "responses": {
+          "200": { "$ref": "#/components/responses/JsonResponse" }
+        }
+      }
+    },
+    "/kb/{knowledgeBaseId}/api/query/feedback": {
+      "post": {
+        "tags": ["Query Runtime"],
+        "summary": "Record scoped answer feedback",
+        "operationId": "recordQueryFeedback",
+        "parameters": [{ "$ref": "#/components/parameters/KnowledgeBaseId" }],
+        "requestBody": { "$ref": "#/components/requestBodies/FeedbackRequest" },
+        "responses": {
+          "200": { "$ref": "#/components/responses/JsonResponse" }
+        }
+      }
+    },
+    "/kb/{knowledgeBaseId}/api/query/feedback/summary": {
+      "get": {
+        "tags": ["Query Runtime"],
+        "summary": "List scoped answer feedback summary",
+        "operationId": "getQueryFeedbackSummary",
+        "parameters": [{ "$ref": "#/components/parameters/KnowledgeBaseId" }],
+        "responses": {
+          "200": { "$ref": "#/components/responses/JsonResponse" }
+        }
+      }
+    },
+    "/kb/{knowledgeBaseId}/api/query/feedback/resolve": {
+      "post": {
+        "tags": ["Query Runtime"],
+        "summary": "Resolve a feedback review item",
+        "operationId": "resolveQueryFeedback",
+        "parameters": [{ "$ref": "#/components/parameters/KnowledgeBaseId" }],
+        "requestBody": { "$ref": "#/components/requestBodies/ResolveFeedbackRequest" },
+        "responses": {
+          "200": { "$ref": "#/components/responses/JsonResponse" }
+        }
+      }
+    },
+    "/kb/{knowledgeBaseId}/api/search": {
+      "get": {
+        "tags": ["Search"],
+        "summary": "Search catalog evidence with query parameters",
+        "operationId": "searchCatalogGet",
+        "parameters": [
+          { "$ref": "#/components/parameters/KnowledgeBaseId" },
+          { "$ref": "#/components/parameters/Query" },
+          { "$ref": "#/components/parameters/DocumentId" },
+          { "$ref": "#/components/parameters/PageStart" },
+          { "$ref": "#/components/parameters/PageEnd" },
+          { "$ref": "#/components/parameters/SourceType" },
+          { "$ref": "#/components/parameters/QualityState" },
+          { "$ref": "#/components/parameters/Limit" }
+        ],
+        "responses": {
+          "200": { "$ref": "#/components/responses/JsonResponse" },
+          "409": { "$ref": "#/components/responses/ErrorResponse" }
+        }
+      },
+      "post": {
+        "tags": ["Search"],
+        "summary": "Search catalog evidence with a JSON request",
+        "operationId": "searchCatalogPost",
+        "parameters": [{ "$ref": "#/components/parameters/KnowledgeBaseId" }],
+        "requestBody": { "$ref": "#/components/requestBodies/SearchRequest" },
+        "responses": {
+          "200": { "$ref": "#/components/responses/JsonResponse" },
+          "409": { "$ref": "#/components/responses/ErrorResponse" }
+        }
+      }
+    },
+    "/kb/{knowledgeBaseId}/api/maintenance/status": {
+      "get": {
+        "tags": ["Maintenance"],
+        "summary": "Read maintenance status, provider readiness, runtime checks, and diagnostics summary",
+        "operationId": "getMaintenanceStatus",
+        "parameters": [{ "$ref": "#/components/parameters/KnowledgeBaseId" }],
+        "responses": {
+          "200": { "$ref": "#/components/responses/JsonResponse" }
+        }
+      }
+    },
+    "/kb/{knowledgeBaseId}/api/maintenance/export": {
+      "get": {
+        "tags": ["Maintenance"],
+        "summary": "Export redacted diagnostics JSON",
+        "operationId": "exportMaintenanceDiagnostics",
+        "parameters": [{ "$ref": "#/components/parameters/KnowledgeBaseId" }],
+        "responses": {
+          "200": { "$ref": "#/components/responses/JsonResponse" }
+        }
+      }
+    },
+    "/kb/{knowledgeBaseId}/api/providers/diagnostics": {
+      "get": {
+        "tags": ["Providers"],
+        "summary": "Read redacted provider readiness, dry-run status, cost, privacy, retry, and next-action diagnostics",
+        "operationId": "getProviderDiagnostics",
+        "parameters": [{ "$ref": "#/components/parameters/KnowledgeBaseId" }],
+        "responses": {
+          "200": { "$ref": "#/components/responses/JsonResponse" }
+        }
+      }
+    },
+    "/kb/{knowledgeBaseId}/api/package/export/preview": {
+      "get": {
+        "tags": ["Package"],
+        "summary": "Preview a redacted knowledge package export",
+        "operationId": "previewPackageExport",
+        "parameters": [{ "$ref": "#/components/parameters/KnowledgeBaseId" }],
+        "responses": {
+          "200": { "$ref": "#/components/responses/JsonResponse" }
+        }
+      }
+    },
+    "/kb/{knowledgeBaseId}/api/package/import/preview": {
+      "post": {
+        "tags": ["Package"],
+        "summary": "Preview a package import plan without writing state",
+        "operationId": "previewPackageImport",
+        "parameters": [{ "$ref": "#/components/parameters/KnowledgeBaseId" }],
+        "requestBody": { "$ref": "#/components/requestBodies/PackageImportPreviewRequest" },
+        "responses": {
+          "200": { "$ref": "#/components/responses/JsonResponse" }
+        }
+      }
+    },
+    "/kb/{knowledgeBaseId}/api/version/manifest": {
+      "get": {
+        "tags": ["Versions"],
+        "summary": "Read the active version manifest summary",
+        "operationId": "getVersionManifest",
+        "parameters": [{ "$ref": "#/components/parameters/KnowledgeBaseId" }],
+        "responses": {
+          "200": { "$ref": "#/components/responses/JsonResponse" }
+        }
+      }
+    },
+    "/kb/{knowledgeBaseId}/api/versions": {
+      "get": {
+        "tags": ["Versions"],
+        "summary": "List build versions",
+        "operationId": "listVersions",
+        "parameters": [
+          { "$ref": "#/components/parameters/KnowledgeBaseId" },
+          { "$ref": "#/components/parameters/Limit" }
+        ],
+        "responses": {
+          "200": { "$ref": "#/components/responses/JsonResponse" }
+        }
+      }
+    },
+    "/kb/{knowledgeBaseId}/api/versions/diff": {
+      "get": {
+        "tags": ["Versions"],
+        "summary": "Preview diff between the active version and another build",
+        "operationId": "diffVersions",
+        "parameters": [
+          { "$ref": "#/components/parameters/KnowledgeBaseId" },
+          {
+            "name": "targetBuildId",
+            "in": "query",
+            "required": true,
+            "schema": { "type": "string" }
+          }
+        ],
+        "responses": {
+          "200": { "$ref": "#/components/responses/JsonResponse" },
+          "404": { "$ref": "#/components/responses/ErrorResponse" }
+        }
+      }
+    },
+    "/kb/{knowledgeBaseId}/api/versions/rollback/preview": {
+      "post": {
+        "tags": ["Versions"],
+        "summary": "Preview a rollback before activation changes",
+        "operationId": "previewRollback",
+        "parameters": [{ "$ref": "#/components/parameters/KnowledgeBaseId" }],
+        "requestBody": { "$ref": "#/components/requestBodies/RollbackRequest" },
+        "responses": {
+          "200": { "$ref": "#/components/responses/JsonResponse" },
+          "404": { "$ref": "#/components/responses/ErrorResponse" }
+        }
+      }
+    },
+    "/kb/{knowledgeBaseId}/api/versions/rollback": {
+      "post": {
+        "tags": ["Versions"],
+        "summary": "Activate a previously built version after explicit confirmation",
+        "operationId": "rollbackVersion",
+        "parameters": [{ "$ref": "#/components/parameters/KnowledgeBaseId" }],
+        "requestBody": { "$ref": "#/components/requestBodies/RollbackRequest" },
+        "responses": {
+          "200": { "$ref": "#/components/responses/JsonResponse" },
+          "409": { "$ref": "#/components/responses/ErrorResponse" }
+        }
+      }
+    }
+  },
+  "components": {
+    "parameters": {
+      "KnowledgeBaseId": {
+        "name": "knowledgeBaseId",
+        "in": "path",
+        "required": true,
+        "description": "Scoped knowledge-base id. Do not use an implicit default.",
+        "schema": { "type": "string", "minLength": 1 }
+      },
+      "Query": {
+        "name": "query",
+        "in": "query",
+        "required": false,
+        "schema": { "type": "string" }
+      },
+      "DocumentId": {
+        "name": "documentId",
+        "in": "query",
+        "required": false,
+        "schema": { "type": "string" }
+      },
+      "PageStart": {
+        "name": "pageStart",
+        "in": "query",
+        "required": false,
+        "schema": { "type": "integer", "minimum": 1 }
+      },
+      "PageEnd": {
+        "name": "pageEnd",
+        "in": "query",
+        "required": false,
+        "schema": { "type": "integer", "minimum": 1 }
+      },
+      "SourceType": {
+        "name": "sourceType",
+        "in": "query",
+        "required": false,
+        "schema": { "type": "string" }
+      },
+      "QualityState": {
+        "name": "qualityState",
+        "in": "query",
+        "required": false,
+        "schema": { "type": "string", "enum": ["primary", "weighted", "review", "archive", "all"] }
+      },
+      "Limit": {
+        "name": "limit",
+        "in": "query",
+        "required": false,
+        "schema": { "type": "integer", "minimum": 1, "maximum": 100 }
+      }
+    },
+    "requestBodies": {
+      "QueryRequest": {
+        "required": true,
+        "content": {
+          "application/json": {
+            "schema": { "$ref": "#/components/schemas/QueryRequest" },
+            "examples": {
+              "ask": {
+                "summary": "Ask through Query Runtime",
+                "value": {
+                  "question": "Which page explains the refund policy?",
+                  "scope": {},
+                  "filters": {},
+                  "debug": false
+                }
+              }
+            }
+          }
+        }
+      },
+      "FeedbackRequest": {
+        "required": true,
+        "content": {
+          "application/json": {
+            "schema": { "$ref": "#/components/schemas/FeedbackRequest" }
+          }
+        }
+      },
+      "ResolveFeedbackRequest": {
+        "required": true,
+        "content": {
+          "application/json": {
+            "schema": { "$ref": "#/components/schemas/ResolveFeedbackRequest" }
+          }
+        }
+      },
+      "SearchRequest": {
+        "required": false,
+        "content": {
+          "application/json": {
+            "schema": { "$ref": "#/components/schemas/SearchRequest" }
+          }
+        }
+      },
+      "PackageImportPreviewRequest": {
+        "required": true,
+        "content": {
+          "application/json": {
+            "schema": {
+              "type": "object",
+              "required": ["manifest"],
+              "properties": {
+                "manifest": { "type": "object", "additionalProperties": true }
+              }
+            }
+          }
+        }
+      },
+      "RollbackRequest": {
+        "required": true,
+        "content": {
+          "application/json": {
+            "schema": {
+              "type": "object",
+              "required": ["targetBuildId"],
+              "properties": {
+                "targetBuildId": { "type": "string" },
+                "confirm": { "type": "boolean", "default": false }
+              }
+            }
+          }
+        }
+      }
+    },
+    "responses": {
+      "JsonResponse": {
+        "description": "JSON response",
+        "content": {
+          "application/json": {
+            "schema": { "type": "object", "additionalProperties": true }
+          }
+        }
+      },
+      "QueryResponse": {
+        "description": "Query Runtime answer, refusal, or diagnostic result",
+        "content": {
+          "application/json": {
+            "schema": { "$ref": "#/components/schemas/QueryResponse" }
+          }
+        }
+      },
+      "ErrorResponse": {
+        "description": "Error response",
+        "content": {
+          "application/json": {
+            "schema": { "$ref": "#/components/schemas/ErrorResponse" }
+          }
+        }
+      }
+    },
+    "schemas": {
+      "QueryRequest": {
+        "type": "object",
+        "required": ["question"],
+        "properties": {
+          "question": { "type": "string", "minLength": 1 },
+          "scope": { "type": "object", "additionalProperties": true },
+          "intent": { "type": "string" },
+          "filters": { "type": "object", "additionalProperties": true },
+          "debug": { "type": "boolean", "default": false }
+        },
+        "additionalProperties": true
+      },
+      "QueryResponse": {
+        "type": "object",
+        "required": ["ok", "status"],
+        "properties": {
+          "ok": { "type": "boolean" },
+          "status": {
+            "type": "string",
+            "enum": [
+              "answered",
+              "out_of_scope",
+              "insufficient_evidence",
+              "no_index",
+              "provider_unavailable",
+              "blocked_by_quality",
+              "invalid_request",
+              "runtime_error"
+            ]
+          },
+          "query": {
+            "type": ["object", "null"],
+            "properties": {
+              "evidencePack": { "$ref": "#/components/schemas/EvidencePack" }
+            },
+            "additionalProperties": true
+          },
+          "answer": { "type": "object", "additionalProperties": true },
+          "citations": { "type": "array", "items": { "type": "object", "additionalProperties": true } },
+          "checks": { "type": "array", "items": { "type": "object", "additionalProperties": true } },
+          "feedback": { "type": "object", "additionalProperties": true },
+          "maintenance": { "type": ["object", "array", "null"], "additionalProperties": true, "items": { "type": "object", "additionalProperties": true } }
+        },
+        "additionalProperties": true
+      },
+      "EvidencePack": {
+        "type": "object",
+        "required": ["version", "answerPolicy", "status", "items"],
+        "properties": {
+          "version": { "type": "string", "enum": ["2026-07-query-runtime.1"] },
+          "answerPolicy": { "type": "string", "enum": ["citation_ready_evidence_only"] },
+          "routeKey": { "type": "string" },
+          "source": { "type": "string" },
+          "status": { "type": "string", "enum": ["ready", "empty"] },
+          "items": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "chunkId": { "type": "string" },
+                "citationId": { "type": "string" },
+                "documentId": { "type": "string" },
+                "documentStatus": { "type": "string" },
+                "qualityState": { "type": "string" },
+                "structurePath": { "type": "string" },
+                "rankingSignals": { "type": "object", "additionalProperties": true },
+                "sourceAnchor": { "type": "object", "additionalProperties": true },
+                "links": { "type": "object", "additionalProperties": true }
+              },
+              "additionalProperties": true
+            }
+          }
+        },
+        "additionalProperties": true
+      },
+      "FeedbackRequest": {
+        "type": "object",
+        "required": ["action"],
+        "properties": {
+          "action": { "type": "string", "enum": ["useful", "wrong_citation", "missed_point"] },
+          "question": { "type": "string" },
+          "status": { "type": "string" },
+          "citationRefs": { "type": "array", "items": { "type": "string" } },
+          "note": { "type": "string" }
+        },
+        "additionalProperties": true
+      },
+      "ResolveFeedbackRequest": {
+        "type": "object",
+        "required": ["id", "resolution"],
+        "properties": {
+          "id": { "type": "string" },
+          "resolution": { "type": "string" },
+          "note": { "type": "string" }
+        },
+        "additionalProperties": true
+      },
+      "SearchRequest": {
+        "type": "object",
+        "properties": {
+          "query": { "type": "string" },
+          "documentId": { "type": "string" },
+          "pageStart": { "type": "integer", "minimum": 1 },
+          "pageEnd": { "type": "integer", "minimum": 1 },
+          "sourceType": { "type": "string" },
+          "qualityState": { "type": "string" },
+          "includeReview": { "type": "boolean" },
+          "limit": { "type": "integer", "minimum": 1, "maximum": 100 }
+        },
+        "additionalProperties": true
+      },
+      "ErrorResponse": {
+        "type": "object",
+        "required": ["ok"],
+        "properties": {
+          "ok": { "const": false },
+          "error": { "type": "string" },
+          "checks": { "type": "array", "items": { "type": "object", "additionalProperties": true } }
+        },
+        "additionalProperties": true
+      }
+    }
+  }
+}

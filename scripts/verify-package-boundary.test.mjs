@@ -12,7 +12,10 @@ test("package boundary rejects runtime state, secrets, sqlite files, and tests",
     "knowledge-bases/kb-k12-all-subjects/catalog.sqlite",
     ".runtime/service.out.log",
     ".env",
-    "artifacts/build/report.json"
+    "artifacts/build/report.json",
+    "exports/final-publication-review-evidence.json",
+    "examples/textbook-cn-k12/private/source.pdf",
+    "fixtures/private/k12/math-book.pdf"
   ]);
 
   assert.equal(result.ok, false);
@@ -22,7 +25,10 @@ test("package boundary rejects runtime state, secrets, sqlite files, and tests",
     "knowledge-bases/kb-k12-all-subjects/catalog.sqlite",
     ".runtime/service.out.log",
     ".env",
-    "artifacts/build/report.json"
+    "artifacts/build/report.json",
+    "exports/final-publication-review-evidence.json",
+    "examples/textbook-cn-k12/private/source.pdf",
+    "fixtures/private/k12/math-book.pdf"
   ]);
 });
 
@@ -32,7 +38,9 @@ test("package boundary allows public source, docs, schemas, and examples", () =>
     "LICENSE",
     "docs/current-design.md",
     "schemas/kb.schema.json",
+    "src/sdk/knowmesh-client.mjs",
     "examples/local-demo/documents/science-note.md",
+    "examples/public-samples/general-docs/source/operations-handbook.md",
     "scripts/release-smoke.mjs",
     "src/local-service/server.mjs"
   ]);

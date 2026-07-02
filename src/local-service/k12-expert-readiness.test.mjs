@@ -22,6 +22,38 @@ test("K12 expert readiness summarizes catalog structure retrieval version and ev
   assert.equal(readiness.phase, "phase3-k12-expert");
   assert.equal(readiness.knowledgeBase.id, kb.id);
   assert.equal(readiness.knowledgeBase.template, "textbook-cn-k12");
+  assert.deepEqual(readiness.knowledgeBase.expert, {
+    id: "k12",
+    templateId: "textbook-cn-k12",
+    name: "KnowMesh Expert · K12",
+    status: "alpha",
+    lifecycle: {
+      stage: "official",
+      since: "0.1.0-alpha",
+      graduation: "K12 is the first official Expert scenario maintained with Core."
+    },
+    manifestVersion: "1.0.0",
+    capabilities: [
+      "schema",
+      "sourceScopeGate",
+      "pageClassifier",
+      "structureBuilder",
+      "objectExtractor",
+      "queryRouter",
+      "evaluationSet"
+    ],
+    supportedSourceTypes: ["pdf", "office", "wps", "markdown", "text", "image"],
+    gates: ["sourceScope", "structureCompleteness", "citationCoverage", "outOfScopeRefusal", "displaySerialization"]
+  });
+  assert.deepEqual(readiness.summary.expertCapabilities, [
+    "schema",
+    "sourceScopeGate",
+    "pageClassifier",
+    "structureBuilder",
+    "objectExtractor",
+    "queryRouter",
+    "evaluationSet"
+  ]);
   assert.equal(readiness.summary.status, "ready");
   assert.equal(readiness.summary.documents, 1);
   assert.equal(readiness.summary.structureNodes, 3);
@@ -65,6 +97,8 @@ test("K12 expert readiness stays not applicable for non K12 knowledge bases", ()
   assert.equal(readiness.summary.status, "not_applicable");
   assert.equal(readiness.knowledgeBase.id, kb.id);
   assert.equal(readiness.knowledgeBase.template, "general-docs");
+  assert.equal(readiness.knowledgeBase.expert, null);
+  assert.deepEqual(readiness.summary.expertCapabilities, []);
   assert.deepEqual(readiness.gaps, []);
 });
 

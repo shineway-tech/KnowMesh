@@ -58,6 +58,51 @@ test("document management supports server paging, full-text assets, and file rev
   assert.doesNotMatch(pagesSource, /document-management-head/);
 });
 
+test("document management exposes catalog evidence search through the shared search API", () => {
+  const appSource = fs.readFileSync(appSourcePath, "utf8");
+  const pagesSource = fs.readFileSync(pagesSourcePath, "utf8");
+  const stylesSource = fs.readFileSync(stylesSourcePath, "utf8");
+  const bindControlsBody = functionBody(appSource, "bindControls");
+
+  assert.match(bindControlsBody, /\bbindCatalogEvidenceSearch\(\);/);
+  assert.match(pagesSource, /data-catalog-search/);
+  assert.match(pagesSource, /data-catalog-search-endpoint="\$\{apiEndpoint\(service, "\/api\/search"\)\}"/);
+  assert.match(pagesSource, /catalogSearchTitle/);
+  assert.match(pagesSource, /catalogSearchPlaceholder/);
+  assert.match(pagesSource, /catalogSearchIncludeReview/);
+  assert.match(pagesSource, /data-catalog-search-document/);
+  assert.match(pagesSource, /data-catalog-search-source-type/);
+  assert.match(pagesSource, /data-catalog-search-page-start/);
+  assert.match(pagesSource, /data-catalog-search-page-end/);
+  assert.match(pagesSource, /data-catalog-search-quality-state/);
+  assert.match(pagesSource, /data-catalog-search-structure-node/);
+  assert.match(appSource, /function bindCatalogEvidenceSearch/);
+  assert.match(appSource, /function renderCatalogSearchResults/);
+  assert.match(appSource, /function renderCatalogSearchItem/);
+  assert.match(appSource, /URLSearchParams/);
+  assert.match(appSource, /data-catalog-search-include-review/);
+  assert.match(appSource, /catalogSearchOptionalField/);
+  assert.match(appSource, /documentId/);
+  assert.match(appSource, /sourceType/);
+  assert.match(appSource, /pageStart/);
+  assert.match(appSource, /pageEnd/);
+  assert.match(appSource, /structureNodeId/);
+  assert.match(appSource, /data-catalog-search-result/);
+  assert.match(appSource, /data-catalog-search-open/);
+  assert.match(appSource, /qualityState/);
+  assert.match(appSource, /citation\.pageNumber/);
+  assert.match(appSource, /rankingSignals/);
+  assert.match(appSource, /data-catalog-search-evidence-state/);
+  assert.match(appSource, /catalogSearchCitationReady/);
+  assert.match(appSource, /catalogSearchNeedsCitation/);
+  assert.match(appSource, /links\?\.evidence/);
+  assert.match(stylesSource, /\.catalog-search-panel/);
+  assert.match(stylesSource, /\.catalog-search-results/);
+  assert.match(stylesSource, /\.catalog-search-item/);
+  assert.match(stylesSource, /\.catalog-search-meta/);
+  assert.match(stylesSource, /\.catalog-search-signals/);
+});
+
 
 
 test("document row keeps rare actions in a more menu with confirmations and i18n", () => {
@@ -217,6 +262,31 @@ test("setup mode changes preserve configured knowledge base progress", () => {
   assert.match(setModeBody, /keepSetupCompletedThrough\("mode"\)/);
 });
 
+test("general setup does not require K12 source-scope fields", () => {
+  const appSource = fs.readFileSync(appSourcePath, "utf8");
+  const requiredFieldsBody = functionBody(appSource, "requiredSetupFieldsForStep");
+  const inferBody = functionBody(appSource, "inferCompletedSetupStepsFromDraft");
+  const serverTemplateBody = functionBody(appSource, "inferSetupTemplateFromServer");
+  const initialTemplateBody = functionBody(appSource, "inferInitialSetupTemplate");
+  const sourceScopeBody = functionBody(appSource, "sourceScopeLooksComplete");
+
+  assert.match(requiredFieldsBody, /sourceScopeRequiredForTemplate\(settings\.template\)/);
+  assert.match(inferBody, /draft\["project\.template"\]/);
+  assert.match(inferBody, /sourceScopeLooksComplete\(draft, template\)/);
+  assert.match(serverTemplateBody, /draft\["project\.template"\]/);
+  assert.match(initialTemplateBody, /draft\["project\.template"\]/);
+  assert.match(appSource, /function sourceScopeRequiredForTemplate/);
+  assert.match(sourceScopeBody, /if \(!sourceScopeRequiredForTemplate\(templateId\)\) return true/);
+});
+
+test("fresh console skips setup state fetch until a knowledge base exists", () => {
+  const appSource = fs.readFileSync(appSourcePath, "utf8");
+
+  assert.match(appSource, /const hasInitialKnowledgeBase = Boolean\(pageState\.knowledgeBases\?\.current\?\.id\);/);
+  assert.match(appSource, /const setupStateRequest = hasInitialKnowledgeBase \? loadSetupState\(\) : Promise\.resolve\(\);/);
+  assert.doesNotMatch(appSource, /loadSetupState\(\)\.finally/);
+});
+
 test("console navigation is grouped by user lifecycle instead of flat feature modules", () => {
   const pagesSource = fs.readFileSync(pagesSourcePath, "utf8");
   const stylesSource = fs.readFileSync(stylesSourcePath, "utf8");
@@ -243,6 +313,23 @@ test("console navigation is grouped by user lifecycle instead of flat feature mo
   assert.match(stylesSource, /\.nav-section/);
   assert.doesNotMatch(stylesSource, /\.nav-sub-list/);
   assert.doesNotMatch(stylesSource, /data-sidebar="collapsed"\] \.nav-sub-list/);
+});
+
+test("welcome page uses user-facing lifecycle wording instead of internal layer names", () => {
+  const pagesSource = fs.readFileSync(pagesSourcePath, "utf8");
+
+  assert.match(pagesSource, /"资料进入"/);
+  assert.match(pagesSource, /"生成知识"/);
+  assert.match(pagesSource, /"质量复核"/);
+  assert.match(pagesSource, /"可追溯回答"/);
+  assert.match(pagesSource, /"版本维护"/);
+  assert.match(pagesSource, /"应用接入"/);
+  assert.doesNotMatch(pagesSource, /\["CORE", "KnowMesh Core"/);
+  assert.doesNotMatch(pagesSource, /\["EXPERT", "KnowMesh Expert"/);
+  assert.doesNotMatch(pagesSource, /\["QUALITY", "Quality Gates"/);
+  assert.doesNotMatch(pagesSource, /\["TRACE", "Traceable Knowledge"/);
+  assert.doesNotMatch(pagesSource, /\["VERSION", "Versioned Knowledge"/);
+  assert.doesNotMatch(pagesSource, /\["ASSETS", "Knowledge Assets"/);
 });
 
 test("knowledge-base switcher uses switch wording instead of duplicate management copy", () => {
@@ -373,6 +460,29 @@ test("home and overview keep one contextual action instead of duplicate ready sh
   assert.match(css, /\.overview-status-panel/);
 });
 
+test("first-run sample wizard is wired through public sample APIs", () => {
+  const appSource = fs.readFileSync(appSourcePath, "utf8");
+  const pagesSource = fs.readFileSync(pagesSourcePath, "utf8");
+  const stylesSource = fs.readFileSync(stylesSourcePath, "utf8");
+  const bindLibraryBody = functionBody(appSource, "bindKnowledgeBaseLibrary");
+
+  assert.match(pagesSource, /renderPublicSampleWizard/);
+  assert.match(pagesSource, /data-public-sample-wizard/);
+  assert.match(pagesSource, /data-public-sample-create="\$\{escapeHtml\(sample\.id\)\}"/);
+  assert.match(pagesSource, /class="secondary-action sample-action"[^>]+data-public-sample-create/);
+  assert.doesNotMatch(pagesSource, /class="primary-action"[^>]+data-public-sample-create/);
+  assert.match(pagesSource, /data-public-sample-reset/);
+  assert.match(pagesSource, /publicSamples: service\.publicSamples/);
+  assert.match(pagesSource, /sampleReady/);
+  assert.match(bindLibraryBody, /data-public-sample-create/);
+  assert.match(bindLibraryBody, /\/api\/public-samples\/create/);
+  assert.match(bindLibraryBody, /scopedPathForKnowledgeBase\(data\.knowledgeBase\?\.id, "\/use\/ask"\)/);
+  assert.match(bindLibraryBody, /data-public-sample-reset/);
+  assert.match(bindLibraryBody, /\/api\/public-samples\/reset/);
+  assert.match(stylesSource, /\.public-sample-wizard/);
+  assert.match(stylesSource, /\.public-sample-card/);
+});
+
 test("query runtime result exposes citations and feedback to users", () => {
   const appSource = fs.readFileSync(appSourcePath, "utf8");
 
@@ -447,6 +557,11 @@ test("version records page autoloads generated knowledge versions", () => {
   assert.match(appSource, /\/api\/versions\/diff\?targetBuildId=/);
   assert.match(appSource, /\/api\/versions\/rollback\/preview/);
   assert.match(appSource, /\/api\/versions\/rollback/);
+  assert.match(appSource, /rollbackReady/);
+  assert.match(appSource, /rollbackReason/);
+  assert.match(appSource, /data-confirm-title-zh="确认回滚版本？"/);
+  assert.match(appSource, /data-confirm-body-zh/);
+  assert.match(appSource, /data-confirm-label-zh/);
   assert.match(stylesSource, /\.version-records-panel/);
   assert.match(stylesSource, /\.version-record-card/);
   assert.match(stylesSource, /\.version-record-actions/);
@@ -467,6 +582,8 @@ test("evaluation dashboard page autoloads safe evaluation summaries", () => {
   assert.match(appSource, /function isEvaluationDashboardResult/);
   assert.match(appSource, /knowmesh\.evaluationDashboard/);
   assert.match(appSource, /function renderEvaluationDashboard/);
+  assert.match(appSource, /function renderEvaluationReleaseGate/);
+  assert.match(appSource, /evaluation-release-gate/);
   assert.match(appSource, /targeted-rerun-preview/);
   assert.match(appSource, /targeted-rerun-confirm/);
   assert.match(appSource, /\/api\/rerun\/preview/);
@@ -477,6 +594,7 @@ test("evaluation dashboard page autoloads safe evaluation summaries", () => {
   assert.match(appSource, /evaluation-failure-list/);
   assert.match(stylesSource, /\.evaluation-dashboard-panel/);
   assert.match(stylesSource, /\.evaluation-dashboard-grid/);
+  assert.match(stylesSource, /\.evaluation-release-gate/);
   assert.match(stylesSource, /\.evaluation-category-list/);
   assert.match(stylesSource, /\.evaluation-failure-list/);
   assert.match(stylesSource, /\.targeted-rerun-panel/);
@@ -517,6 +635,8 @@ test("maintenance result uses a dedicated view without duplicate status cards", 
   const appSource = fs.readFileSync(appSourcePath, "utf8");
   const renderContentBody = functionBody(appSource, "renderApiResultContent");
   const maintenanceBody = functionBody(appSource, "renderMaintenanceStatus");
+  const platformRuntimeBody = functionBody(appSource, "renderPlatformRuntime");
+  const dependencyItemBody = functionBody(appSource, "dependencyItem");
   const stylesSource = fs.readFileSync(stylesSourcePath, "utf8");
 
   assert.match(renderContentBody, /isMaintenanceStatusResult\(null,\s*data,\s*actionKey\)/);
@@ -526,14 +646,24 @@ test("maintenance result uses a dedicated view without duplicate status cards", 
   assert.match(maintenanceBody, /renderMaintenanceProgress/);
   assert.match(maintenanceBody, /renderPlatformRuntime/);
   assert.match(maintenanceBody, /renderProviderCapabilities/);
+  assert.match(maintenanceBody, /renderProviderDiagnostics/);
   assert.match(maintenanceBody, /renderMaintenanceDiagnostics/);
+  assert.match(platformRuntimeBody, /dependencyItem\("folderPicker", dependencies\.folderPicker\)/);
+  assert.match(platformRuntimeBody, /dependencyItem\("fileReveal", dependencies\.fileReveal\)/);
+  assert.match(dependencyItemBody, /folderPicker: "目录选择"/);
+  assert.match(dependencyItemBody, /fileReveal: "定位文件"/);
+  assert.match(dependencyItemBody, /folderPicker: "Folder Picker"/);
+  assert.match(dependencyItemBody, /fileReveal: "Reveal File"/);
   assert.match(renderContentBody, /isPackageExportPreviewResult\(data,\s*actionKey\)/);
   assert.match(appSource, /function renderPlatformRuntime/);
   assert.match(appSource, /function renderProviderCapabilities/);
+  assert.match(appSource, /function renderProviderDiagnostics/);
+  assert.match(appSource, /data-provider-diagnostics/);
   assert.match(appSource, /function renderPackageExportPreview/);
   assert.match(stylesSource, /\.platform-runtime-panel/);
   assert.match(stylesSource, /\.platform-runtime-dependencies/);
   assert.match(stylesSource, /\.provider-capability-panel/);
+  assert.match(stylesSource, /\.provider-diagnostics-panel/);
   assert.match(stylesSource, /\.provider-cost-privacy/);
   assert.match(stylesSource, /\.package-export-panel/);
   assert.doesNotMatch(maintenanceBody, /renderQueryFeedbackList/);

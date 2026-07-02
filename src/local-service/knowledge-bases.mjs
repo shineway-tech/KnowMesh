@@ -73,7 +73,11 @@ export function listKnowledgeBases(state) {
       FROM knowledge_bases
       ORDER BY created_at ASC, id ASC
     `).all().map(rowToKnowledgeBase);
-    const currentId = readWorkspaceState(db, "currentKnowledgeBaseId");
+    const workspaceCurrentId = readWorkspaceState(db, "currentKnowledgeBaseId");
+    const scopedCurrentId = normalizeKnowledgeBaseId(state.knowledgeBaseId || "");
+    const currentId = scopedCurrentId && items.some((item) => item.id === scopedCurrentId)
+      ? scopedCurrentId
+      : workspaceCurrentId;
     const current = items.find((item) => item.id === currentId) || null;
     return {
       ok: true,

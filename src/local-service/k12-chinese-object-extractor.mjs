@@ -1,5 +1,6 @@
 import { k12TemplateId } from "../core/document-scope.mjs";
 import { currentKnowledgeBaseId, listKnowledgeBases } from "./knowledge-bases.mjs";
+import { requireK12RelationType } from "./k12-object-contract.mjs";
 import { nowIso, openCatalogDatabase, parseJson } from "./storage.mjs";
 
 export function extractK12ChineseObjectsFromCatalog(state, options = {}) {
@@ -37,11 +38,12 @@ export function extractK12ChineseObjectsFromCatalog(state, options = {}) {
         };
         objects.push(object);
         if (lesson) {
+          const relationType = requireK12RelationType("lesson_to_vocabulary");
           relations.push({
-            relationId: `relation:${object.objectId}:belongs_to_lesson:${lesson.objectId}`,
-            sourceObjectId: object.objectId,
-            targetObjectId: lesson.objectId,
-            relationType: "belongs_to_lesson",
+            relationId: `relation:${lesson.objectId}:${relationType}:${object.objectId}`,
+            sourceObjectId: lesson.objectId,
+            targetObjectId: object.objectId,
+            relationType,
             documentId: block.documentId,
             structureNodeId: lesson.structureNodeId,
             qualityState: block.qualityState,

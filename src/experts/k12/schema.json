@@ -1,0 +1,51 @@
+{
+  "id": "knowmesh.experts.k12.schema",
+  "version": "0.1.0",
+  "templateId": "textbook-cn-k12",
+  "objectTypes": [
+    { "id": "book", "anchor": "whole textbook or volume" },
+    { "id": "unit", "anchor": "teaching unit or chapter" },
+    { "id": "lesson", "anchor": "lesson inside a unit" },
+    { "id": "section", "anchor": "named section inside a lesson" },
+    { "id": "column", "anchor": "sidebar or recurring textbook column" },
+    { "id": "text", "anchor": "lesson body text" },
+    { "id": "vocabulary", "anchor": "word, phrase, or vocabulary table item" },
+    { "id": "knowledge_point", "anchor": "explicit concept or learning point" },
+    { "id": "formula", "anchor": "formula or symbolic rule" },
+    { "id": "table", "anchor": "table with page evidence" },
+    { "id": "figure", "anchor": "figure, diagram, image, or score" },
+    { "id": "example", "anchor": "worked example" },
+    { "id": "exercise", "anchor": "question, task, or practice item" },
+    { "id": "answer_explanation", "anchor": "answer, solution, or explanation" },
+    { "id": "experiment", "anchor": "science experiment" },
+    { "id": "activity", "anchor": "activity, discussion, performance, or labor task" },
+    { "id": "citation_anchor", "anchor": "page, block, structure, or object citation target" }
+  ],
+  "relationTypes": [
+    { "id": "book_to_unit", "source": "book", "target": "unit" },
+    { "id": "unit_to_lesson", "source": "unit", "target": "lesson" },
+    { "id": "lesson_to_section", "source": "lesson", "target": "section" },
+    { "id": "section_to_column", "source": "section", "target": "column" },
+    { "id": "lesson_to_text", "source": "lesson", "target": "text" },
+    { "id": "lesson_to_vocabulary", "source": "lesson", "target": "vocabulary" },
+    { "id": "lesson_to_knowledge_point", "source": "lesson", "target": "knowledge_point" },
+    { "id": "lesson_to_exercise", "source": "lesson", "target": "exercise" },
+    { "id": "exercise_to_answer_explanation", "source": "exercise", "target": "answer_explanation" },
+    { "id": "formula_to_example", "source": "formula", "target": "example" },
+    { "id": "formula_to_exercise", "source": "formula", "target": "exercise" },
+    { "id": "figure_to_section", "source": "figure", "target": "section" },
+    { "id": "table_to_section", "source": "table", "target": "section" },
+    { "id": "experiment_to_activity", "source": "experiment", "target": "activity" },
+    { "id": "object_to_citation_anchor", "source": "*", "target": "citation_anchor" }
+  ],
+  "aliases": {
+    "objectTypes": {
+      "lesson_text": "text",
+      "vocabulary_table": "vocabulary"
+    },
+    "relationTypes": {
+      "belongs_to_lesson": "lesson_to_vocabulary",
+      "supports_exercise": "formula_to_exercise"
+    }
+  }
+}

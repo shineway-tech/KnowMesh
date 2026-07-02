@@ -1,0 +1,15 @@
+{
+  "contractVersion": "2026-07-query-runtime.1",
+  "kind": "knowmesh.queryResult",
+  "ok": false,
+  "status": "provider_unavailable",
+  "error": {
+    "code": "provider_unavailable",
+    "message": "The configured generation provider is unavailable."
+  },
+  "citations": [],
+  "checks": [
+    { "key": "providerReady", "status": "blocked" }
+  ],
+  "retryable": true
+}

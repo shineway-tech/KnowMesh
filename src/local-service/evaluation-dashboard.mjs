@@ -1,7 +1,35 @@
 import { currentKnowledgeBaseId, listKnowledgeBases } from "./knowledge-bases.mjs";
+import { expertEvaluationForDashboard } from "./expert-evaluation.mjs";
 import { nowIso, openCatalogDatabase, parseJson } from "./storage.mjs";
 
 const defaultPrivacyExcludes = ["evaluationQuestions", "expectedAnswers", "sourceContent", "answerText"];
+const k12TemplateId = "textbook-cn-k12";
+const k12RequiredEvaluationCategories = [
+  "toc_lookup",
+  "unit_lesson_lookup",
+  "vocabulary_lookup",
+  "writing_oral_communication_lookup",
+  "math_concept_lookup",
+  "math_example_lookup",
+  "english_unit_theme",
+  "english_vocabulary",
+  "science_experiment",
+  "page_citation",
+  "cross_volume_comparison",
+  "publisher_comparison",
+  "out_of_scope_refusal",
+  "no_answer_behavior"
+];
+const releaseGateThresholds = {
+  coveragePercent: 100,
+  passRate: 85,
+  citationBearingUsableRate: 85,
+  outOfScopeRefusalRate: 100,
+  displaySerializationErrors: 0,
+  maxFailed: 0,
+  maxReview: 0,
+  maxMissing: 0
+};
 
 export function evaluationDashboard(state, options = {}) {
   const registry = listKnowledgeBases(state);
@@ -17,6 +45,8 @@ export function evaluationDashboard(state, options = {}) {
     const summary = summarizeRows(caseRows, activeBuild);
     const categories = summarizeCategories(caseRows);
     const failureGroups = summarizeFailureGroups(categories);
+    const releaseGate = buildReleaseGate({ summary, categories, recentBuilds, template });
+    const expertEvaluation = expertEvaluationForDashboard(knowledgeBase, summary, categories, failureGroups);
     return {
       ok: true,
       kind: "knowmesh.evaluationDashboard",
@@ -30,10 +60,12 @@ export function evaluationDashboard(state, options = {}) {
       },
       summary,
       byStatus: summary.byStatus,
+      expertEvaluation,
+      releaseGate,
       categories,
       failureGroups,
       recentBuilds,
-      nextActions: buildNextActions(summary, failureGroups),
+      nextActions: buildNextActions(summary, failureGroups, releaseGate),
       privacy: {
         redacted: true,
         excludes: defaultPrivacyExcludes
@@ -264,13 +296,79 @@ function summarizeFailureGroups(categories = []) {
     .sort((a, b) => (severity[a.status] ?? 9) - (severity[b.status] ?? 9) || a.category.localeCompare(b.category));
 }
 
-function buildNextActions(summary, failureGroups = []) {
+function buildReleaseGate({ summary = {}, categories = [], recentBuilds = [], template = "" } = {}) {
+  if (!summary.cases) {
+    return {
+      status: "empty",
+      blocksPublish: true,
+      thresholds: releaseGateThresholds,
+      checks: [],
+      missingRequiredCategories: [],
+      trend: releaseGateTrend(recentBuilds)
+    };
+  }
+
+  const categoryByKey = new Map(categories.map((item) => [item.category, item]));
+  const requiredCategories = template === k12TemplateId ? k12RequiredEvaluationCategories : [];
+  const missingRequiredCategories = requiredCategories.filter((key) => !categoryByKey.has(key));
+  const outOfScope = categoryByKey.get("out_of_scope_refusal") || null;
+  const displaySerializationErrors = countRiskCodes(categories, ["display_serialization", "displaySerialization", "display-serialization"]);
+  const checks = [
+    gateCheck("activeBuild", summary.activeBuildId ? "pass" : "fail", "当前构建", "Active build", summary.activeBuildId || "missing"),
+    gateCheck("coverage", summary.coveragePercent >= releaseGateThresholds.coveragePercent ? "pass" : "fail", "评测覆盖", "Evaluation coverage", `${summary.coveragePercent}%/${releaseGateThresholds.coveragePercent}%`),
+    gateCheck("passRate", summary.passRate >= releaseGateThresholds.passRate ? "pass" : "fail", "通过率", "Pass rate", `${summary.passRate}%/${releaseGateThresholds.passRate}%`),
+    gateCheck("failedResults", summary.failed <= releaseGateThresholds.maxFailed ? "pass" : "fail", "失败结果", "Failed results", String(summary.failed || 0)),
+    gateCheck("reviewResults", summary.review <= releaseGateThresholds.maxReview ? "pass" : "fail", "待复核结果", "Review results", String(summary.review || 0)),
+    gateCheck("missingResults", summary.missing <= releaseGateThresholds.maxMissing ? "pass" : "fail", "缺失结果", "Missing results", String(summary.missing || 0)),
+    gateCheck("citationBearingUsable", summary.citationBearingUsableRate >= releaseGateThresholds.citationBearingUsableRate ? "pass" : "fail", "可引用答案", "Citation-bearing usable answers", `${summary.citationBearingUsableRate}%/${releaseGateThresholds.citationBearingUsableRate}%`)
+  ];
+
+  if (requiredCategories.length) {
+    checks.push(gateCheck(
+      "requiredK12Categories",
+      missingRequiredCategories.length ? "fail" : "pass",
+      "K12 必备类别",
+      "Required K12 categories",
+      missingRequiredCategories.length ? `${missingRequiredCategories.length} missing` : "complete"
+    ));
+    checks.push(gateCheck(
+      "outOfScopeRefusal",
+      outOfScope?.passRate === releaseGateThresholds.outOfScopeRefusalRate ? "pass" : "fail",
+      "越界拒答",
+      "Out-of-scope refusal",
+      `${outOfScope?.passRate || 0}%/${releaseGateThresholds.outOfScopeRefusalRate}%`
+    ));
+    checks.push(gateCheck(
+      "displaySerialization",
+      displaySerializationErrors <= releaseGateThresholds.displaySerializationErrors ? "pass" : "fail",
+      "展示序列化",
+      "Display serialization",
+      String(displaySerializationErrors)
+    ));
+  }
+
+  const failed = checks.filter((item) => item.status === "fail").length;
+  const warned = checks.filter((item) => item.status === "warn").length;
+  return {
+    status: failed ? "blocked" : warned ? "attention" : "ready",
+    blocksPublish: failed > 0,
+    thresholds: releaseGateThresholds,
+    checks,
+    missingRequiredCategories,
+    trend: releaseGateTrend(recentBuilds)
+  };
+}
+
+function buildNextActions(summary, failureGroups = [], releaseGate = null) {
   if (!summary.cases) {
     return [
       action("buildEvaluation", "/build", "生成或重新生成知识库", "Build or rebuild the knowledge base")
     ];
   }
   const actions = [];
+  if (releaseGate?.blocksPublish && failureGroups.length) {
+    actions.push(action("targetedRerun", "/maintain/evaluation", "预览局部重跑", "Preview targeted rerun"));
+  }
   if (summary.missing > 0) actions.push(action("rerunEvaluation", "/build", "补跑缺失评测", "Run missing evaluations"));
   if (failureGroups.some((item) => item.failed > 0 || item.review > 0)) {
     actions.push(action("reviewSources", "/maintain/documents", "复核相关资料", "Review related sources"));
@@ -292,6 +390,43 @@ function action(key, href, labelZh, labelEn) {
     href,
     label: { zh: labelZh, en: labelEn }
   };
+}
+
+function gateCheck(key, status, labelZh, labelEn, value = "") {
+  return {
+    key,
+    status,
+    label: { zh: labelZh, en: labelEn },
+    value
+  };
+}
+
+function releaseGateTrend(recentBuilds = []) {
+  const current = recentBuilds[0] || null;
+  const previous = recentBuilds[1] || null;
+  return {
+    currentBuildId: current?.buildId || "",
+    previousBuildId: previous?.buildId || "",
+    passRateDelta: current && previous ? numberValue(current.passRate) - numberValue(previous.passRate) : 0,
+    failedDelta: current && previous ? numberValue(current.failed) - numberValue(previous.failed) : 0,
+    reviewDelta: current && previous ? numberValue(current.review) - numberValue(previous.review) : 0,
+    direction: current && previous
+      ? numberValue(current.passRate) >= numberValue(previous.passRate) && numberValue(current.failed) <= numberValue(previous.failed)
+        ? "improving"
+        : "regressing"
+      : "unknown"
+  };
+}
+
+function countRiskCodes(categories = [], codes = []) {
+  const wanted = new Set(codes);
+  let count = 0;
+  for (const category of categories) {
+    for (const code of category.riskCodes || []) {
+      if (wanted.has(code)) count += 1;
+    }
+  }
+  return count;
 }
 
 function dashboardStatus(summary = {}) {
@@ -364,6 +499,24 @@ function emptyDashboard() {
       citationBearingPassed: 0,
       citationBearingUsableRate: 0,
       byStatus: statusCounts()
+    },
+    releaseGate: {
+      status: "empty",
+      blocksPublish: true,
+      thresholds: releaseGateThresholds,
+      checks: [],
+      missingRequiredCategories: [],
+      trend: releaseGateTrend([])
+    },
+    expertEvaluation: {
+      status: "not_applicable",
+      expert: null,
+      gates: [],
+      failureCategories: [],
+      privacy: {
+        redacted: true,
+        excludes: defaultPrivacyExcludes
+      }
     },
     byStatus: statusCounts(),
     categories: [],

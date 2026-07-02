@@ -1,0 +1,35 @@
+name: Expert request
+description: Request or scope a new KnowMesh Expert domain.
+title: "[Expert]: "
+labels: ["enhancement", "area:expert", "help wanted"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Please compare the request with Current Design (`docs/current-design.md`). Use public sample or synthetic material only; no private data.
+  - type: textarea
+    id: domain
+    attributes:
+      label: Domain and users
+      description: What domain needs an Expert, and who would use it?
+    validations:
+      required: true
+  - type: textarea
+    id: objects
+    attributes:
+      label: Objects, relations, and query routes
+      description: List expected objects, relations, gates, and Query Runtime routes.
+    validations:
+      required: true
+  - type: textarea
+    id: public-sample
+    attributes:
+      label: Public sample boundary
+      description: Describe a public sample or synthetic fixture. Do not include private content.
+    validations:
+      required: true
+  - type: textarea
+    id: acceptance
+    attributes:
+      label: Acceptance
+      description: Suggested tests or docs that would prove the Expert is scoped correctly.

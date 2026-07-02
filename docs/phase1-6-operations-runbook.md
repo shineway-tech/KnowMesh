@@ -237,6 +237,19 @@ Run release-artifact smoke against a clean temporary consumer project:
 npm run smoke:artifact
 ```
 
+Check the package boundary and release-gate checklist before creating a GitHub
+release:
+
+```bash
+npm run verify:package-boundary
+npm run verify:release-gate
+```
+
+`verify:release-gate` prints the required evidence list. A release is allowed
+only after local tests, release smoke, artifact smoke with checksum, package
+boundary, `git diff --check`, CI, CodeQL, and OpenSSF Scorecard all have passing
+evidence for the release commit. npm publication remains a separate decision.
+
 Run targeted checks for the architecture and packaging foundation:
 
 ```bash

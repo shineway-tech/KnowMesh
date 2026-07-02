@@ -66,6 +66,16 @@ export function previewKnowledgeBaseRollback(state, input = {}) {
   if (!target) return versionError("knowmesh.versionRollbackPreview", "TARGET_VERSION_NOT_FOUND", "Target version was not found.", context);
   if (!target.release) return versionError("knowmesh.versionRollbackPreview", "TARGET_RELEASE_REQUIRED", "Target version has no release to activate.", context);
   if (target.active) return versionError("knowmesh.versionRollbackPreview", "TARGET_ALREADY_ACTIVE", "Target version is already active.", context);
+  const readiness = rollbackReadiness(target);
+  if (!readiness.ready) {
+    return versionError(
+      "knowmesh.versionRollbackPreview",
+      "TARGET_RELEASE_NOT_ACTIVATABLE",
+      readiness.message.en,
+      context,
+      { reason: readiness.reason, localizedMessage: readiness.message }
+    );
+  }
   const diff = buildVersionDiff(context, context.active, target);
   return {
     ok: true,
@@ -78,7 +88,7 @@ export function previewKnowledgeBaseRollback(state, input = {}) {
     targetReleaseId: target.release.releaseId,
     diff,
     checks: [
-      versionCheck("targetRelease", "pass", "目标版本", "Target version", "目标版本有可激活发布记录。", "The target version has an activatable release."),
+      versionCheck("targetRelease", "pass", "目标版本", "Target version", readiness.message.zh, readiness.message.en),
       versionCheck("activation", "warn", "回滚确认", "Rollback confirmation", "确认后会切换当前生效版本。", "Confirmation switches the active version.")
     ],
     confirmation: {
@@ -104,6 +114,7 @@ export function rollbackKnowledgeBaseVersion(state, input = {}) {
 
   const context = readVersionContext(state);
   const target = context.versions.find((item) => item.buildId === preview.targetBuildId);
+  if (!target) return versionError("knowmesh.versionRollback", "TARGET_VERSION_NOT_FOUND", "Target version was not found.", context);
   const now = nowIso();
   const db = openCatalogDatabase(state, context.current.id);
   try {
@@ -164,6 +175,7 @@ function readVersionRecordsFromCatalog(state, knowledgeBaseId) {
   try {
     const documentCounts = countByStatus(db, "source_documents");
     const indexCounts = countByStatus(db, "index_records");
+    const chunkCounts = countChunksByQuality(db);
     const buildRows = db.prepare(`
       SELECT
         b.build_id,
@@ -188,7 +200,7 @@ function readVersionRecordsFromCatalog(state, knowledgeBaseId) {
       ORDER BY r.build_id ASC, r.updated_at DESC, r.release_id ASC
     `).all());
     return buildRows
-      .map((row) => versionRecordFromCatalogRow({ ...row, ...(releaseByBuild.get(row.build_id) || {}) }, { documentCounts, indexCounts }))
+      .map((row) => versionRecordFromCatalogRow({ ...row, ...(releaseByBuild.get(row.build_id) || {}) }, { documentCounts, indexCounts, chunkCounts }))
       .filter(Boolean);
   } finally {
     db.close();
@@ -209,6 +221,11 @@ function readVersionContext(state) {
   }
   const db = openCatalogDatabase(state, current.id);
   try {
+    const catalog = catalogRollbackSummary({
+      documentCounts: countByStatus(db, "source_documents"),
+      indexCounts: countByStatus(db, "index_records"),
+      chunkCounts: countChunksByQuality(db)
+    });
     const buildRows = db.prepare(`
       SELECT build_id, status, active, parent_build_id, summary_json, created_at, updated_at
       FROM build_versions
@@ -220,7 +237,7 @@ function readVersionContext(state) {
       ORDER BY build_id ASC, updated_at DESC, release_id ASC
     `).all();
     const releaseByBuild = preferredReleaseByBuild(releaseRows);
-    const versions = buildRows.map((row) => rawVersionRow(row, releaseByBuild.get(row.build_id) || null));
+    const versions = buildRows.map((row) => rawVersionRow(row, releaseByBuild.get(row.build_id) || null, catalog));
     return {
       ok: true,
       current,
@@ -232,13 +249,14 @@ function readVersionContext(state) {
   }
 }
 
-function rawVersionRow(row, release = null) {
+function rawVersionRow(row, release = null, catalog = null) {
   return {
     buildId: String(row.build_id || ""),
     status: String(row.status || ""),
     active: Number(row.active || 0) === 1,
     parentBuildId: String(row.parent_build_id || ""),
     buildSummary: parseJson(row.summary_json, {}),
+    catalog,
     release: release ? {
       releaseId: String(release.release_id || ""),
       buildId: String(release.build_id || ""),
@@ -285,21 +303,44 @@ function releaseStatusRank(status) {
 function versionRecordFromCatalogRow(row, counts) {
   const buildSummary = parseJson(row.build_summary_json, {});
   const releaseSummary = parseJson(row.release_summary_json, {});
+  const combinedSummary = { ...safeObject(buildSummary), ...safeObject(releaseSummary) };
   const target = releaseSummary.target || buildSummary.target || {};
   const sidecar = releaseSummary.sidecar || null;
   const manifestPath = String(row.manifest_path || "");
-  const writeRecords = Number(counts.indexCounts.written || counts.indexCounts.embedded || 0);
-  const writeFailed = Number(counts.indexCounts.failed || 0);
-  const includedDocuments = Number(counts.documentCounts.included || 0);
-  const excludedDocuments = Number(counts.documentCounts.excluded || 0) + Number(counts.documentCounts.excluded_by_user || 0);
-  const attentionDocuments = Number(counts.documentCounts.missing || 0);
+  const catalog = catalogRollbackSummary(counts);
+  const writeRecords = catalog.writeRecords;
+  const writeFailed = catalog.writeFailed;
+  const includedDocuments = catalog.includedDocuments;
+  const excludedDocuments = catalog.excludedDocuments;
+  const attentionDocuments = catalog.attentionDocuments;
   const totalDocuments = includedDocuments + excludedDocuments + attentionDocuments;
   const sidecarRecords = Number(sidecar?.chunks || sidecar?.records || writeRecords || 0);
+  const traceStore = traceStoreForVersion(target, sidecar, catalog);
+  const rollback = rollbackReadiness({
+    buildId: String(row.build_id || ""),
+    status: String(row.build_status || ""),
+    active: Number(row.active || 0) === 1,
+    buildSummary,
+    catalog,
+    release: row.release_id ? {
+      releaseId: String(row.release_id || ""),
+      status: String(row.release_status || ""),
+      manifestPath,
+      summary: releaseSummary
+    } : null
+  });
 
   return {
     id: row.build_id,
+    buildId: row.build_id,
     active: Number(row.active || 0) === 1,
     status: row.release_status || row.build_status || "draft",
+    release: row.release_id ? {
+      id: String(row.release_id || ""),
+      status: String(row.release_status || ""),
+      createdAt: row.release_created_at || "",
+      updatedAt: row.release_updated_at || ""
+    } : null,
     createdAt: row.release_created_at || row.build_created_at || "",
     path: versionRootFromManifestPath(manifestPath),
     target: {
@@ -309,22 +350,25 @@ function versionRecordFromCatalogRow(row, counts) {
       region: target.region || ""
     },
     sidecar: {
-      status: sidecar?.authoritativeStore === "oss-sidecar" || sidecar?.manifestUri ? "ready" : "missing",
-      store: sidecar?.authoritativeStore || "",
-      manifestUri: sidecar?.manifestUri || "",
+      status: traceStore.status,
+      store: traceStore.store,
+      manifestUri: traceStore.manifestUri,
       chunks: sidecarRecords
     },
     documents: {
       total: totalDocuments,
       included: includedDocuments,
       excluded: excludedDocuments,
-      attention: attentionDocuments
+      attention: attentionDocuments,
+      pages: numberValue(safeObject(combinedSummary.documents).pages)
     },
     write: {
       records: writeRecords,
       success: writeRecords,
       failed: writeFailed
-    }
+    },
+    rollbackReady: rollback.ready,
+    rollbackReason: rollback.message
   };
 }
 
@@ -332,11 +376,17 @@ function buildVersionDiff(context, base, target) {
   const baseSafe = safeVersionSummary(base);
   const targetSafe = safeVersionSummary(target);
   const comparison = {
-    documents: compareNumericGroup(baseSafe.documents, targetSafe.documents, ["included", "excluded", "attention", "total"]),
+    documents: compareNumericGroup(baseSafe.documents, targetSafe.documents, ["included", "excluded", "attention", "total", "pages"]),
+    extraction: compareNumericGroup(baseSafe.extraction, targetSafe.extraction, ["pages", "blocks", "failed"]),
+    structure: compareNumericGroup(baseSafe.structure, targetSafe.structure, ["nodes", "objects", "relations", "orphanObjects"]),
+    chunks: compareNumericGroup(baseSafe.chunks, targetSafe.chunks, ["total", "queryable", "unlinked"]),
+    index: compareNumericGroup(baseSafe.index, targetSafe.index, ["records", "written", "failed", "stale"]),
     write: compareNumericGroup(baseSafe.write, targetSafe.write, ["records", "success", "failed"]),
-    evaluation: compareNumericGroup(baseSafe.evaluation, targetSafe.evaluation, ["passed", "failed", "review"]),
+    evaluation: compareNumericGroup(baseSafe.evaluation, targetSafe.evaluation, ["passed", "failed", "review", "coveragePercent", "passRate"]),
+    gates: compareMixedGroup(baseSafe.gates, targetSafe.gates, ["coveragePercent", "passRate", "requiredCases", "missingCases"], ["status"]),
+    queryFeedback: compareNumericGroup(baseSafe.queryFeedback, targetSafe.queryFeedback, ["open", "resolved", "negative", "positive"]),
     target: compareValueGroup(baseSafe.target, targetSafe.target, ["provider", "bucket", "indexName", "region"]),
-    sidecar: compareValueGroup(baseSafe.sidecar, targetSafe.sidecar, ["status", "store", "manifestUri", "chunks"])
+    sidecar: compareMixedGroup(baseSafe.sidecar, targetSafe.sidecar, ["chunks"], ["status", "store", "manifestUri"])
   };
   return {
     ok: true,
@@ -354,8 +404,14 @@ function buildVersionDiff(context, base, target) {
     comparison,
     changes: [
       change("documents", comparison.documents),
+      change("extraction", comparison.extraction),
+      change("structure", comparison.structure),
+      change("chunks", comparison.chunks),
+      change("index", comparison.index),
       change("write", comparison.write),
       change("evaluation", comparison.evaluation),
+      change("gates", comparison.gates),
+      change("queryFeedback", comparison.queryFeedback),
       change("target", comparison.target),
       change("sidecar", comparison.sidecar)
     ]
@@ -368,8 +424,14 @@ function safeVersionSummary(version) {
     ...safeObject(version.release?.summary)
   };
   const documents = safeObject(summary.documents);
+  const extraction = safeObject(summary.extraction);
+  const structure = safeObject(summary.structure);
+  const chunks = safeObject(summary.chunks || summary.chunk);
+  const index = safeObject(summary.index || summary.indexRecords || summary.vectorIndex);
   const write = safeObject(summary.write);
   const evaluation = safeObject(summary.evaluation);
+  const gates = safeObject(summary.gates || summary.qualityGates || evaluation.gates || evaluation.gate);
+  const queryFeedback = safeObject(summary.queryFeedback || summary.feedback);
   const target = safeObject(summary.target);
   const sidecar = safeObject(summary.sidecar);
   return {
@@ -383,7 +445,30 @@ function safeVersionSummary(version) {
       included: numberValue(documents.included),
       excluded: numberValue(documents.excluded),
       attention: numberValue(documents.attention),
-      total: numberValue(documents.total, numberValue(documents.included) + numberValue(documents.excluded) + numberValue(documents.attention))
+      total: numberValue(documents.total, numberValue(documents.included) + numberValue(documents.excluded) + numberValue(documents.attention)),
+      pages: numberValue(documents.pages)
+    },
+    extraction: {
+      pages: numberValue(extraction.pages, numberValue(documents.pages)),
+      blocks: numberValue(extraction.blocks),
+      failed: numberValue(extraction.failed)
+    },
+    structure: {
+      nodes: numberValue(structure.nodes || structure.structureNodes),
+      objects: numberValue(structure.objects || structure.knowledgeObjects),
+      relations: numberValue(structure.relations || structure.objectRelations),
+      orphanObjects: numberValue(structure.orphanObjects)
+    },
+    chunks: {
+      total: numberValue(chunks.total || chunks.chunks),
+      queryable: numberValue(chunks.queryable || chunks.queryableChunks),
+      unlinked: numberValue(chunks.unlinked || chunks.unlinkedChunks)
+    },
+    index: {
+      records: numberValue(index.records),
+      written: numberValue(index.written),
+      failed: numberValue(index.failed),
+      stale: numberValue(index.stale)
     },
     write: {
       records: numberValue(write.records),
@@ -393,7 +478,22 @@ function safeVersionSummary(version) {
     evaluation: {
       passed: numberValue(evaluation.passed),
       failed: numberValue(evaluation.failed),
-      review: numberValue(evaluation.review)
+      review: numberValue(evaluation.review),
+      coveragePercent: numberValue(evaluation.coveragePercent),
+      passRate: numberValue(evaluation.passRate)
+    },
+    gates: {
+      status: String(gates.status || evaluation.status || ""),
+      coveragePercent: numberValue(gates.coveragePercent, numberValue(evaluation.coveragePercent)),
+      passRate: numberValue(gates.passRate, numberValue(evaluation.passRate)),
+      requiredCases: numberValue(gates.requiredCases),
+      missingCases: numberValue(gates.missingCases || gates.missing)
+    },
+    queryFeedback: {
+      open: numberValue(queryFeedback.open),
+      resolved: numberValue(queryFeedback.resolved),
+      negative: numberValue(queryFeedback.negative),
+      positive: numberValue(queryFeedback.positive)
     },
     target: {
       provider: String(target.provider || ""),
@@ -438,6 +538,13 @@ function compareValueGroup(base, target, keys) {
   return result;
 }
 
+function compareMixedGroup(base, target, numericKeys, valueKeys) {
+  return {
+    ...compareNumericGroup(base, target, numericKeys),
+    ...compareValueGroup(base, target, valueKeys)
+  };
+}
+
 function change(key, comparison) {
   return {
     key,
@@ -471,12 +578,113 @@ function versionCheck(key, status, labelZh, labelEn, messageZh, messageEn) {
   };
 }
 
-function versionError(kind, code, message, context = {}) {
+function versionError(kind, code, message, context = {}, details = {}) {
   return {
     ok: false,
     kind,
     knowledgeBase: publicKnowledgeBase(context.current),
-    error: { code, message }
+    error: { code, message, ...details }
+  };
+}
+
+function rollbackReadiness(version) {
+  if (!version?.release) {
+    return rollbackBlocked("missing-release", "目标版本没有发布记录。", "Target version has no release record.");
+  }
+  if (version.active) {
+    return rollbackBlocked("already-active", "目标版本已经生效。", "Target version is already active.");
+  }
+  const releaseStatus = String(version.release.status || "").toLowerCase();
+  const buildStatus = String(version.status || "").toLowerCase();
+  if (!["published", "ready"].includes(releaseStatus)) {
+    return rollbackBlocked("release-not-ready", "目标发布尚未完成，不能回滚。", "Target release is not ready for rollback.");
+  }
+  if (!["published", "ready"].includes(buildStatus)) {
+    return rollbackBlocked("build-not-ready", "目标构建尚未完成，不能回滚。", "Target build is not ready for rollback.");
+  }
+  if (!String(version.release.manifestPath || "").trim()) {
+    return rollbackBlocked("missing-manifest", "目标发布缺少 manifest，不能回滚。", "Target release is missing its manifest.");
+  }
+  const summary = {
+    ...safeObject(version.buildSummary),
+    ...safeObject(version.release.summary)
+  };
+  const sidecar = safeObject(summary.sidecar);
+  const target = safeObject(summary.target);
+  const provider = String(target.provider || "").toLowerCase();
+  const catalog = safeObject(version.catalog);
+  if (provider === "local") {
+    const catalogRecords = Number(catalog.writeRecords || 0);
+    if (catalogRecords > 0) {
+      return {
+        ready: true,
+        reason: "ready",
+        message: {
+          zh: "目标版本有完整发布记录、manifest 和 catalog.sqlite 可追溯记录。",
+          en: "Target version has a complete release record, manifest, and catalog.sqlite trace records."
+        }
+      };
+    }
+    return rollbackBlocked("missing-catalog-records", "目标本地版本缺少 catalog.sqlite 可追溯记录，不能回滚。", "Target local version is missing catalog.sqlite trace records.");
+  }
+  if (!(sidecar.authoritativeStore === "oss-sidecar" || sidecar.manifestUri || sidecar.status === "ready")) {
+    return rollbackBlocked("missing-sidecar", "目标发布缺少可追溯 Sidecar，不能回滚。", "Target release is missing its traceable sidecar.");
+  }
+  return {
+    ready: true,
+    reason: "ready",
+    message: {
+      zh: "目标版本有完整发布记录、manifest 和 Sidecar。",
+      en: "Target version has a complete release record, manifest, and sidecar."
+    }
+  };
+}
+
+function catalogRollbackSummary(counts = {}) {
+  const documentCounts = safeObject(counts.documentCounts);
+  const indexCounts = safeObject(counts.indexCounts);
+  const chunkCounts = safeObject(counts.chunkCounts);
+  const queryableChunks = Number(chunkCounts.primary || 0) + Number(chunkCounts.weighted || 0);
+  const indexedRecords = Number(indexCounts.written || indexCounts.embedded || 0);
+  return {
+    store: "catalog.sqlite",
+    writeRecords: indexedRecords || queryableChunks,
+    queryableChunks,
+    indexedRecords,
+    writeFailed: Number(indexCounts.failed || 0),
+    includedDocuments: Number(documentCounts.included || 0),
+    excludedDocuments: Number(documentCounts.excluded || 0) + Number(documentCounts.excluded_by_user || 0),
+    attentionDocuments: Number(documentCounts.missing || 0)
+  };
+}
+
+function traceStoreForVersion(target = {}, sidecar = null, catalog = {}) {
+  if (sidecar?.authoritativeStore === "oss-sidecar" || sidecar?.manifestUri || sidecar?.status === "ready") {
+    return {
+      status: "ready",
+      store: sidecar?.authoritativeStore || "sidecar",
+      manifestUri: sidecar?.manifestUri || ""
+    };
+  }
+  if (String(target?.provider || "").toLowerCase() === "local" && Number(catalog.writeRecords || 0) > 0) {
+    return {
+      status: "ready",
+      store: "catalog.sqlite",
+      manifestUri: ""
+    };
+  }
+  return {
+    status: "missing",
+    store: sidecar?.authoritativeStore || "",
+    manifestUri: sidecar?.manifestUri || ""
+  };
+}
+
+function rollbackBlocked(reason, zh, en) {
+  return {
+    ready: false,
+    reason,
+    message: { zh, en }
   };
 }
 
@@ -487,6 +695,14 @@ function safeObject(value) {
 function numberValue(value, fallback = 0) {
   const number = Number(value);
   return Number.isFinite(number) ? number : fallback;
+}
+
+function countChunksByQuality(db) {
+  const counts = {};
+  for (const row of db.prepare("SELECT quality_state, count(*) AS count FROM chunks GROUP BY quality_state").all()) {
+    counts[row.quality_state || ""] = Number(row.count || 0);
+  }
+  return counts;
 }
 
 function countByStatus(db, tableName) {

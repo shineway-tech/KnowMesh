@@ -21,6 +21,7 @@ export function previewTargetedRerun(state, input = {}) {
     const evaluationFailures = target.type === "failedBatch" ? safeEvaluationFailures(evaluation.failureGroups) : [];
     const failureBatches = target.type === "failedBatch" ? buildFailureBatches(selected, issueSummary, evaluationFailures) : [];
     const summary = buildSummary(selected, issueSummary, evaluationFailures);
+    const diagnostics = buildRerunDiagnostics(selected);
     const ok = summary.canConfirm;
     return {
       ok,
@@ -41,6 +42,7 @@ export function previewTargetedRerun(state, input = {}) {
       failureBatches,
       evaluationFailures,
       qualityIssues: issueSummary,
+      diagnostics,
       checks: buildPreviewChecks(summary, target),
       nextActions: buildNextActions(summary),
       rerunScope: buildRerunScope(target, selected, summary, evaluationFailures),
@@ -96,7 +98,63 @@ function selectTarget(db, target) {
   if (target.type === "pageRange") return selectPageRangeTarget(db, target);
   if (target.type === "unit") return selectUnitTarget(db, target);
   if (target.type === "failedBatch") return selectFailedBatchTarget(db, target);
+  if (target.type === "issue") return selectIssueTarget(db, target);
   return selectDocumentTarget(db, target);
+}
+
+function selectIssueTarget(db, target) {
+  const issueId = String(target.issueId || "").trim();
+  if (!issueId) return emptySelection();
+  const issue = db.prepare(`
+    SELECT issue_id, target_type, target_id, severity, status
+    FROM quality_issues
+    WHERE issue_id = ? AND status = 'open'
+    LIMIT 1
+  `).get(issueId);
+  if (!issue) return emptySelection();
+  const issueRow = qualityIssueRow(issue);
+  if (issueRow.targetType === "document") {
+    const document = readDocument(db, { documentId: issueRow.targetId });
+    if (!document) return { ...emptySelection(), issueRows: [issueRow] };
+    return {
+      ...withPageRanges(db, {
+        documents: [summarizeDocument(db, document)],
+        pageRows: readPagesForDocuments(db, [document.documentId]),
+        structureNodes: readStructureNodesForDocuments(db, [document.documentId])
+      }),
+      issueRows: [issueRow]
+    };
+  }
+  if (issueRow.targetType === "page") {
+    const page = readPageById(db, issueRow.targetId);
+    const document = page ? readDocument(db, { documentId: page.documentId }) : null;
+    if (!page || !document) return { ...emptySelection(), issueRows: [issueRow] };
+    return {
+      ...withPageRanges(db, {
+        documents: [summarizeDocument(db, document, { pageRows: [page] })],
+        pageRows: [page],
+        structureNodes: readStructureNodesForDocuments(db, [document.documentId])
+          .filter((node) => rangesOverlap(page.pageNumber, page.pageNumber, node.pageStart, node.pageEnd)),
+        explicitRange: { document, startPage: page.pageNumber, endPage: page.pageNumber }
+      }),
+      issueRows: [issueRow]
+    };
+  }
+  if (issueRow.targetType === "chunk") {
+    const chunk = db.prepare("SELECT chunk_id, document_id, structure_node_id FROM chunks WHERE chunk_id = ? LIMIT 1").get(issueRow.targetId);
+    const document = chunk?.document_id ? readDocument(db, { documentId: chunk.document_id }) : null;
+    const structureNodes = chunk?.structure_node_id ? readStructureNodesById(db, [chunk.structure_node_id]) : [];
+    if (!document) return { ...emptySelection(), issueRows: [issueRow] };
+    return {
+      ...withPageRanges(db, {
+        documents: [summarizeDocument(db, document)],
+        pageRows: structureNodes.length ? readPagesForStructureNodes(db, structureNodes) : readPagesForDocuments(db, [document.documentId]),
+        structureNodes
+      }),
+      issueRows: [issueRow]
+    };
+  }
+  return { ...emptySelection(), issueRows: [issueRow] };
 }
 
 function selectDocumentTarget(db, target) {
@@ -227,12 +285,18 @@ function withPageRanges(db, selection = {}) {
   const pageRanges = selection.explicitRange
     ? [rangeSummary(selection.explicitRange.document, selection.explicitRange.startPage, selection.explicitRange.endPage, pageRows)]
     : summarizePageRanges(documents, pageRows);
+  const chunkIds = readChunkIds(db, documents.map((item) => item.documentId), structureNodes);
   return {
     documents,
     pageRows,
     pageRanges,
     structureNodes,
-    chunkIds: readChunkIds(db, documents.map((item) => item.documentId), structureNodes)
+    chunkIds,
+    citationIds: readCitationIds(db, chunkIds),
+    indexRecordIds: readIndexRecordIds(db, chunkIds),
+    staleIndexRecordIds: readStaleIndexRecordIds(db, chunkIds),
+    missingCitationChunkIds: readMissingCitationChunkIds(db, chunkIds),
+    skippedExtractionPages: pageRows.filter((row) => row.skipped)
   };
 }
 
@@ -272,6 +336,16 @@ function readPagesForDocuments(db, documentIds = []) {
   `).all(...documentIds).map(pageRow);
 }
 
+function readPageById(db, pageId) {
+  const row = db.prepare(`
+    SELECT page_id, document_id, page_number, extraction_state, quality_state, metadata_json
+    FROM pages
+    WHERE page_id = ?
+    LIMIT 1
+  `).get(pageId);
+  return row ? pageRow(row) : null;
+}
+
 function readPagesForStructureNodes(db, nodes = []) {
   const pages = [];
   for (const node of nodes) {
@@ -300,6 +374,19 @@ function readStructureNodesForDocuments(db, documentIds = []) {
   `).all(...documentIds).map(structureNodeRow);
 }
 
+function readStructureNodesById(db, nodeIds = []) {
+  const ids = unique(nodeIds);
+  if (!ids.length) return [];
+  return db.prepare(`
+    SELECT sn.node_id, sn.document_id, sd.title AS document_title, sd.normalized_relative_path,
+           sn.node_type, sn.title, sn.page_start, sn.page_end, sn.path, sn.metadata_json
+    FROM structure_nodes sn
+    JOIN source_documents sd ON sd.document_id = sn.document_id
+    WHERE sn.node_id IN (${placeholders(ids)})
+    ORDER BY sn.document_id ASC, sn.page_start ASC, sn.sort_order ASC
+  `).all(...ids).map(structureNodeRow);
+}
+
 function readChunkIds(db, documentIds = [], structureNodes = []) {
   const ids = new Set();
   if (documentIds.length) {
@@ -316,7 +403,61 @@ function readChunkIds(db, documentIds = [], structureNodes = []) {
   return [...ids].filter(Boolean).sort();
 }
 
+function readCitationIds(db, chunkIds = []) {
+  const ids = unique(chunkIds);
+  if (!ids.length) return [];
+  return db.prepare(`
+    SELECT citation_id
+    FROM citations
+    WHERE chunk_id IN (${placeholders(ids)})
+    ORDER BY citation_id ASC
+  `).all(...ids).map((row) => String(row.citation_id || "")).filter(Boolean);
+}
+
+function readIndexRecordIds(db, chunkIds = []) {
+  const ids = unique(chunkIds);
+  if (!ids.length) return [];
+  return db.prepare(`
+    SELECT record_id
+    FROM index_records
+    WHERE chunk_id IN (${placeholders(ids)})
+    ORDER BY record_id ASC
+  `).all(...ids).map((row) => String(row.record_id || "")).filter(Boolean);
+}
+
+function readStaleIndexRecordIds(db, chunkIds = []) {
+  const ids = unique(chunkIds);
+  if (!ids.length) return [];
+  return db.prepare(`
+    SELECT record_id
+    FROM index_records
+    WHERE chunk_id IN (${placeholders(ids)}) AND lower(status) = 'stale'
+    ORDER BY record_id ASC
+  `).all(...ids).map((row) => String(row.record_id || "")).filter(Boolean);
+}
+
+function readMissingCitationChunkIds(db, chunkIds = []) {
+  const ids = unique(chunkIds);
+  if (!ids.length) return [];
+  return db.prepare(`
+    SELECT c.chunk_id
+    FROM chunks c
+    LEFT JOIN citations ci ON ci.chunk_id = c.chunk_id
+    WHERE c.chunk_id IN (${placeholders(ids)})
+    GROUP BY c.chunk_id
+    HAVING count(ci.citation_id) = 0
+    ORDER BY c.chunk_id ASC
+  `).all(...ids).map((row) => String(row.chunk_id || "")).filter(Boolean);
+}
+
 function readQualityIssueSummary(db, selected = {}, options = {}) {
+  if (Array.isArray(selected.issueRows) && selected.issueRows.length) {
+    return {
+      total: selected.issueRows.length,
+      byTargetType: countBy(selected.issueRows, (row) => row.targetType || "unknown"),
+      bySeverity: countBy(selected.issueRows, (row) => row.severity || "review")
+    };
+  }
   const documentIds = new Set((selected.documents || []).map((item) => item.documentId));
   const pageIds = new Set((selected.pageRows || []).map((item) => item.pageId));
   const rows = db.prepare(`
@@ -381,12 +522,92 @@ function buildRerunScope(target, selected, summary, evaluationFailures) {
   return {
     target,
     summary,
+    qualityIssueIds: unique((selected.issueRows || []).map((item) => item.issueId)),
     documentIds: unique((selected.documents || []).map((item) => item.documentId)),
     relativePaths: unique((selected.documents || []).map((item) => normalizeRelativePath(item.relativePath))),
     pageRanges: selected.pageRanges || [],
     structureNodeIds: unique((selected.structureNodes || []).map((item) => item.nodeId)),
     chunkIds: selected.chunkIds || [],
-    evaluationCategories: unique((evaluationFailures || []).map((item) => item.category))
+    citationIds: selected.citationIds || [],
+    indexRecordIds: selected.indexRecordIds || [],
+    evaluationCategories: unique((evaluationFailures || []).map((item) => item.category)),
+    rebuildPlan: {
+      catalogTables: [
+        "source_documents",
+        "document_versions",
+        "pages",
+        "blocks",
+        "structure_nodes",
+        "chunks",
+        "citations",
+        "index_records",
+        "quality_issues",
+        "evaluation_results"
+      ],
+      artifactScopes: ["sources", "pages", "normalized", "reports"],
+      preserves: ["workspace.sqlite", "catalog.sqlite authority"]
+    }
+  };
+}
+
+function buildRerunDiagnostics(selected = {}) {
+  const items = [];
+  const missingCitations = selected.missingCitationChunkIds || [];
+  const staleIndexRecords = selected.staleIndexRecordIds || [];
+  const skippedExtractionPages = selected.skippedExtractionPages || [];
+  if (missingCitations.length) {
+    items.push(rerunDiagnostic(
+      "missingCitations",
+      missingCitations.length,
+      "缺少引用锚点",
+      "Missing citation anchors",
+      "部分可搜索片段没有引用锚点，重跑会重建 citations。",
+      "Some searchable chunks are missing citation anchors; rerun rebuilds citations.",
+      "/maintain/documents"
+    ));
+  }
+  if (staleIndexRecords.length) {
+    items.push(rerunDiagnostic(
+      "staleIndexRecords",
+      staleIndexRecords.length,
+      "索引记录已过期",
+      "Stale index records",
+      "部分索引记录已标记过期，重跑会重建 index_records。",
+      "Some index records are stale; rerun rebuilds index_records.",
+      "/maintain/diagnostics"
+    ));
+  }
+  if (skippedExtractionPages.length) {
+    items.push(rerunDiagnostic(
+      "skippedExtraction",
+      skippedExtractionPages.length,
+      "解析或 OCR 被跳过",
+      "Skipped parser or OCR work",
+      "部分页面处于 skipped/pending 状态，重跑会重新进入解析或 OCR。",
+      "Some pages are skipped or pending; rerun sends them back through parser or OCR.",
+      "/build/execution"
+    ));
+  }
+  return {
+    summary: {
+      total: items.length,
+      missingCitations: missingCitations.length,
+      staleIndexRecords: staleIndexRecords.length,
+      skippedExtraction: skippedExtractionPages.length
+    },
+    items
+  };
+}
+
+function rerunDiagnostic(key, count, labelZh, labelEn, messageZh, messageEn, href) {
+  return {
+    key,
+    status: "warn",
+    count,
+    fixable: true,
+    label: { zh: labelZh, en: labelEn },
+    message: { zh: messageZh, en: messageEn },
+    action: { href, label: { zh: "创建局部重跑", en: "Create targeted rerun" } }
   };
 }
 
@@ -434,7 +655,8 @@ function pageRow(row = {}) {
     pageNumber: Number(row.page_number || 0),
     extractionState,
     qualityState: String(row.quality_state || ""),
-    retryable: retryableExtractionStates.has(extractionState) || metadata.retry?.retryable === true
+    retryable: retryableExtractionStates.has(extractionState) || metadata.retry?.retryable === true,
+    skipped: ["skipped", "pending", "not_started", "blocked"].includes(extractionState)
   };
 }
 
@@ -453,9 +675,10 @@ function structureNodeRow(row = {}) {
 }
 
 function normalizeTarget(input = {}) {
-  const type = String(input.type || input.targetType || "document").trim() || "document";
+  const type = normalizeTargetType(input.type || input.targetType || "document");
   return {
     type,
+    ...(input.issueId || input.issue_id ? { issueId: String(input.issueId || input.issue_id).trim() } : {}),
     ...(input.documentId || input.document_id ? { documentId: String(input.documentId || input.document_id).trim() } : {}),
     ...(input.relativePath || input.path ? { relativePath: normalizeRelativePath(input.relativePath || input.path) } : {}),
     ...(input.startPage || input.pageStart ? { startPage: Number(input.startPage || input.pageStart) } : {}),
@@ -465,8 +688,27 @@ function normalizeTarget(input = {}) {
   };
 }
 
+function normalizeTargetType(value) {
+  const type = String(value || "document").trim() || "document";
+  if (type === "file") return "document";
+  if (type === "page" || type === "page_range" || type === "page-range") return "pageRange";
+  if (type === "failed_batch" || type === "failed-batch") return "failedBatch";
+  if (type === "qualityIssue" || type === "quality_issue" || type === "reviewIssue" || type === "review_issue") return "issue";
+  return type;
+}
+
+function qualityIssueRow(row = {}) {
+  return {
+    issueId: String(row.issue_id || ""),
+    targetType: String(row.target_type || ""),
+    targetId: String(row.target_id || ""),
+    severity: String(row.severity || ""),
+    status: String(row.status || "")
+  };
+}
+
 function emptySelection() {
-  return { documents: [], pageRows: [], pageRanges: [], structureNodes: [], chunkIds: [] };
+  return { documents: [], pageRows: [], pageRanges: [], structureNodes: [], chunkIds: [], issueRows: [] };
 }
 
 function emptyPreview(input = {}) {
@@ -497,6 +739,7 @@ function emptyPreview(input = {}) {
     failureBatches: [],
     evaluationFailures: [],
     qualityIssues: { total: 0, byTargetType: {}, bySeverity: {} },
+    diagnostics: { summary: { total: 0, missingCitations: 0, staleIndexRecords: 0, skippedExtraction: 0 }, items: [] },
     checks: buildPreviewChecks(summary, target),
     nextActions: buildNextActions(summary),
     rerunScope: buildRerunScope(target, emptySelection(), summary, []),

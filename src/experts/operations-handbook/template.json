@@ -1,0 +1,60 @@
+{
+  "id": "operations-handbook",
+  "expertId": "operations-handbook",
+  "manifestVersion": "1.0.0",
+  "supportedContractVersion": "2026-07-query-runtime.1",
+  "name": "KnowMesh Expert · Operations Handbook",
+  "status": "example",
+  "schema": "src/experts/operations-handbook/schema.json",
+  "supportedSourceTypes": ["markdown", "text", "pdf", "office"],
+  "setupFields": [
+    { "key": "metadata.domain", "required": false },
+    { "key": "metadata.owner", "required": false },
+    { "key": "metadata.effective_date", "required": false }
+  ],
+  "sourceScope": {
+    "policy": "public-handbook-scope",
+    "rules": ["documentType", "owner", "effectiveDate", "publicFixtureOnly"]
+  },
+  "extraction": {
+    "objects": [
+      "policy",
+      "procedure",
+      "workflow",
+      "workflow_step",
+      "role",
+      "exception",
+      "owner",
+      "review_cadence",
+      "rollback_rule",
+      "evidence_requirement"
+    ],
+    "relations": ["owned_by", "requires", "supersedes", "cites", "has_exception", "has_role", "requires_evidence"]
+  },
+  "gates": ["citationCoverage", "currentVersion", "secretRedaction", "reviewCadence"],
+  "qualityGates": ["citationCoverage", "currentVersion", "credentialRedaction", "reviewCadence"],
+  "queryRoutes": ["policyScopeLookup", "workflowStepLookup", "hybridCitation", "noAnswerWithoutEvidence"],
+  "queryRouteRules": [
+    { "key": "policyScopeLookup", "intent": "structure_lookup", "priority": 8, "evidencePolicy": "citation_ready_evidence_only" },
+    { "key": "workflowStepLookup", "intent": "procedure_lookup", "priority": 8, "evidencePolicy": "citation_ready_evidence_only" },
+    { "key": "noAnswerWithoutEvidence", "intent": "insufficient_evidence", "priority": 90, "evidencePolicy": "no_weak_answer" }
+  ],
+  "evaluationCases": ["policy_lookup", "workflow_step_lookup", "review_cadence_lookup", "rollback_rule_lookup", "no_answer_behavior"],
+  "migrations": [
+    { "id": "operations-handbook-001-object-contract", "scope": "catalog", "required": false }
+  ],
+  "docs": [
+    "docs/experts/operations-handbook.zh-CN.md",
+    "docs/experts/operations-handbook.en.md",
+    "docs/experts/authoring.zh-CN.md",
+    "docs/experts/authoring.en.md"
+  ],
+  "requiredTests": [
+    "src/local-service/expert-registry.test.mjs",
+    "src/local-service/expert-runtime.test.mjs",
+    "src/local-service/expert-evaluation.test.mjs",
+    "src/local-service/operations-handbook-expert.test.mjs"
+  ],
+  "permissions": [],
+  "fixtures": ["examples/public-samples/operations-handbook/source/incident-operations-handbook.md"]
+}

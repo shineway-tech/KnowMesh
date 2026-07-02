@@ -1,0 +1,23 @@
+{
+  "contractVersion": "2026-07-query-runtime.1",
+  "kind": "knowmesh.providerDiagnostics",
+  "ok": true,
+  "knowledgeBase": {
+    "id": "sample-general-docs"
+  },
+  "summary": {
+    "adapterManifests": 11,
+    "cloudProvidersConfigured": 0,
+    "localProvidersReady": 3
+  },
+  "dryRun": {
+    "status": "ready",
+    "externalCallsBeforeExecution": 0
+  },
+  "privacy": {
+    "redacted": true
+  },
+  "nextActions": [
+    { "key": "useLocalParser", "status": "ready" }
+  ]
+}

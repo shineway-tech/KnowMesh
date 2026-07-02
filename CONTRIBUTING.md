@@ -57,6 +57,31 @@ The default local demo checks do not upload files, call OCR, call embedding, or 
 - Keep Core domain-neutral; K12 and future industries belong in Expert boundaries.
 - Preserve explicit execution gates before uploads, deletes, OCR calls, embedding calls, or vector writes.
 
+## Extension Lifecycle
+
+Expert and Provider contributions must declare one lifecycle stage:
+
+| Stage | Meaning |
+| --- | --- |
+| `official` | Maintained with Core and covered by release gates. |
+| `certified` | Community or partner extension reviewed against docs, tests, security, and runtime boundaries. |
+| `community` | Useful extension maintained outside Core, with clear owner and limitations. |
+| `experimental` | Exploration only; not a stable API or release promise. |
+
+The order is intentionally `official` -> `certified` -> `community` -> `experimental`. New extensions usually start as `experimental` unless maintainers explicitly accept a stronger stage. Extensions must not read or mutate internal SQLite paths directly; use public Core, Expert, Provider, and Query Runtime interfaces.
+
+## Expert SDK Proposals
+
+To propose a community Expert, open an issue or discussion with:
+
+- the intended domain and why it belongs outside Core;
+- a public fixture or synthetic sample that can be committed safely;
+- the manifest fields, source-scope rules, query route rules, quality gates, and evaluation cases;
+- the expected lifecycle stage, usually `experimental` first;
+- the required tests, including `expert-runtime.test.mjs`, `expert-evaluation.test.mjs`, and a domain-specific sample test.
+
+The `operations-handbook` Expert is the reference public fixture for non-K12 Expert SDK work. A proposal must not require private datasets, direct SQLite writes, credentials, or local absolute paths.
+
 ## Safety Rules
 
 Never commit:
@@ -83,6 +108,7 @@ Before opening a PR:
 - Link the issue or explain the user-facing problem.
 - State which layer is affected: Platform, Web Console, Core, Knowledge Asset Layer, Expert, or Provider.
 - Explain whether `workspace.sqlite`, `catalog.sqlite`, credentials, local files, cloud operations, or generated artifacts are affected.
+- For Expert or Provider changes, declare lifecycle stage and prove the extension avoids internal SQLite dependencies and unsafe permissions.
 - Keep Chinese and English docs in sync when changing public docs.
 - Run the narrowest relevant test first, then broader checks when shared behavior or release assets are touched.
 

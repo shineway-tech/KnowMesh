@@ -37,6 +37,14 @@ test("evaluation dashboard summarizes active build results without leaking case 
   assert.equal(dashboard.byStatus.fail, 1);
   assert.equal(dashboard.byStatus.review, 1);
   assert.equal(dashboard.byStatus.missing, 1);
+  assert.equal(dashboard.releaseGate.status, "blocked");
+  assert.equal(dashboard.releaseGate.blocksPublish, true);
+  assert.equal(dashboard.releaseGate.thresholds.citationBearingUsableRate, 85);
+  assert.ok(dashboard.releaseGate.checks.some((item) => item.key === "requiredK12Categories" && item.status === "fail"));
+  assert.ok(dashboard.releaseGate.checks.some((item) => item.key === "outOfScopeRefusal" && item.status === "fail"));
+  assert.ok(dashboard.releaseGate.missingRequiredCategories.includes("vocabulary_lookup"));
+  assert.equal(dashboard.releaseGate.trend.passRateDelta, -67);
+  assert.equal(dashboard.releaseGate.trend.failedDelta, 1);
   assert.equal(dashboard.categories.find((item) => item.category === "unit_lesson_lookup").status, "fail");
   assert.deepEqual(dashboard.failureGroups.map((item) => item.category), ["unit_lesson_lookup", "no_answer_behavior", "out_of_scope_refusal"]);
   assert.ok(dashboard.failureGroups.some((item) => item.riskCodes.includes("route_status_mismatch")));
@@ -44,6 +52,7 @@ test("evaluation dashboard summarizes active build results without leaking case 
   assert.equal(dashboard.recentBuilds[0].failed, 1);
   assert.equal(dashboard.recentBuilds[1].buildId, "build-previous-eval");
   assert.ok(dashboard.nextActions.some((item) => item.href === "/maintain/documents"));
+  assert.ok(dashboard.nextActions.some((item) => item.key === "targetedRerun"));
   assert.deepEqual(dashboard.privacy.excludes, ["evaluationQuestions", "expectedAnswers", "sourceContent", "answerText"]);
   assert.doesNotMatch(serialized, /private evaluation question/);
   assert.doesNotMatch(serialized, /private expected answer/);
@@ -63,6 +72,8 @@ test("evaluation dashboard reports empty state for a knowledge base without case
   assert.equal(dashboard.summary.cases, 0);
   assert.deepEqual(dashboard.categories, []);
   assert.deepEqual(dashboard.failureGroups, []);
+  assert.equal(dashboard.releaseGate.status, "empty");
+  assert.equal(dashboard.releaseGate.blocksPublish, true);
   assert.equal(dashboard.nextActions[0].href, "/build");
 });
 

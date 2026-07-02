@@ -1,0 +1,12 @@
+{
+  "contractVersion": "2026-07-query-runtime.1",
+  "ok": false,
+  "status": "invalid_request",
+  "error": {
+    "code": "invalid_request",
+    "message": "question is required"
+  },
+  "checks": [
+    { "key": "requestShape", "status": "fail" }
+  ]
+}

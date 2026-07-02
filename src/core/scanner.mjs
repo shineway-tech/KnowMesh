@@ -15,9 +15,17 @@ export async function scanSource(config, options = {}) {
   const include = config?.source?.include?.length ? config.source.include : ["**/*"];
   const warnings = [];
   const files = fs.existsSync(sourceRoot) ? walkFiles(sourceRoot) : [];
-  const entries = files
-    .map((file) => buildFileEntry(file, sourceRoot, { skipHash: options.skipHash }))
-    .filter((entry) => matchesAnyGlob(entry.relativePath, include));
+  const fileEntries = files.map((file) => buildFileEntry(file, sourceRoot, { skipHash: options.skipHash }));
+  const entries = fileEntries.filter((entry) => matchesAnyGlob(entry.relativePath, include));
+  const unsupportedFiles = fileEntries
+    .filter((entry) => !matchesAnyGlob(entry.relativePath, include))
+    .map((entry) => ({
+      relativePath: entry.relativePath,
+      size: entry.size,
+      mtime: entry.mtime,
+      sourceType: detectSourceType(entry.relativePath),
+      reason: "unsupported_source_type"
+    }));
 
   const splitPdfEnabled = config?.source?.splitPdf?.mergeParts !== false;
   const splitGroups = new Map();
@@ -105,6 +113,7 @@ export async function scanSource(config, options = {}) {
     files: {
       scanned: files.length,
       supported: entries.length,
+      unsupported: unsupportedFiles.length,
       included: entries.length
     },
     splitPdfGroups: [...splitGroups.values()].map((group) => ({
@@ -113,6 +122,7 @@ export async function scanSource(config, options = {}) {
       sourceParts: group.parts.sort((a, b) => a.partNumber - b.partNumber).map((part) => toSourcePart(part))
     })),
     logicalDocuments,
+    unsupportedFiles,
     warnings
   };
 }

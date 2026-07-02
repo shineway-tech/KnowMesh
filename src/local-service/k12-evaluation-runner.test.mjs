@@ -23,7 +23,22 @@ test("K12 evaluation runner seeds required cases and writes safe build results",
   assert.equal(seed.ok, true);
   assert.equal(seed.requiredCases, k12RequiredEvaluationCases.length);
   assert.equal(seed.seeded, k12RequiredEvaluationCases.length);
-  assert.ok(seed.categories.includes("out_of_scope_refusal"));
+  assert.deepEqual(seed.categories, [
+    "toc_lookup",
+    "unit_lesson_lookup",
+    "vocabulary_lookup",
+    "writing_oral_communication_lookup",
+    "math_concept_lookup",
+    "math_example_lookup",
+    "english_unit_theme",
+    "english_vocabulary",
+    "science_experiment",
+    "page_citation",
+    "cross_volume_comparison",
+    "publisher_comparison",
+    "out_of_scope_refusal",
+    "no_answer_behavior"
+  ]);
 
   assert.equal(run.ok, true);
   assert.equal(run.buildId, "build-k12-evaluation-runner");
@@ -206,8 +221,8 @@ function writeK12EvaluationRouteFixture(state, knowledgeBaseId) {
         page: 88,
         now
       });
-      insertRelation(db, "rel-vocab-lesson", "object-vocabulary-jingqiao", "object-lesson-hunter", "belongs_to_lesson", "doc-chinese-g5-v1", "lesson-chinese-v1-u3-l1", now);
-      insertRelation(db, "rel-formula-exercise", "object-math-formula", "object-math-exercise", "supports_exercise", "doc-math-g5-v1", "unit-math-5", now);
+      insertRelation(db, "rel-lesson-vocab", "object-lesson-hunter", "object-vocabulary-jingqiao", "lesson_to_vocabulary", "doc-chinese-g5-v1", "lesson-chinese-v1-u3-l1", now);
+      insertRelation(db, "rel-formula-exercise", "object-math-formula", "object-math-exercise", "formula_to_exercise", "doc-math-g5-v1", "unit-math-5", now);
     });
     write();
   } finally {

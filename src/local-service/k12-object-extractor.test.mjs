@@ -19,9 +19,9 @@ test("K12 object extractor writes classified block objects linked to lesson node
 
   assert.equal(result.ok, true);
   assert.equal(result.kind, "knowmesh.k12ObjectExtractionResult");
-  assert.equal(result.summary.objects, 1);
-  assert.equal(result.objects[0].objectType, "exercise");
-  assert.equal(result.objects[0].structureNodeId, "lesson-1");
+  assert.equal(result.summary.objects, 2);
+  assert.deepEqual(result.objects.map((object) => object.objectType).sort(), ["exercise", "text"]);
+  assert.ok(result.objects.every((object) => object.structureNodeId === "lesson-1"));
 
   const db = new Database(catalogDatabasePath(state, kb.id), { readonly: true });
   try {
@@ -36,6 +36,11 @@ test("K12 object extractor writes classified block objects linked to lesson node
     assert.equal(metadata.text, undefined);
     assert.equal(metadata.textPreview, undefined);
     assert.doesNotMatch(JSON.stringify(metadata), /private exercise text/);
+
+    const textObject = db.prepare("SELECT object_type, metadata_json FROM knowledge_objects WHERE object_id = ?")
+      .get("k12-object:block-lesson-text");
+    assert.equal(textObject.object_type, "text");
+    assert.doesNotMatch(JSON.stringify(JSON.parse(textObject.metadata_json)), /private lesson text/);
   } finally {
     db.close();
   }
@@ -72,6 +77,17 @@ function writeClassifiedBlockFixture(state, knowledgeBaseId) {
         page_end: 5,
         title: "课后练习",
         text: "private exercise text"
+      }), now, now);
+      db.prepare(`
+        INSERT INTO blocks (
+          block_id, page_id, document_id, block_type, sort_order, text_path, text_hash, structure_path, quality_state, metadata_json, created_at, updated_at
+        ) VALUES ('block-lesson-text', 'page-5', 'doc-k12-objects', 'lesson_text', 2, 'artifacts/text/body.md', 'sha-text-block', '', 'primary', ?, ?, ?)
+      `).run(JSON.stringify({
+        contentType: "lesson_text",
+        page_start: 5,
+        page_end: 5,
+        title: "课文正文",
+        text: "private lesson text"
       }), now, now);
     });
     write();

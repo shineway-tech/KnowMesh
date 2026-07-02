@@ -1,0 +1,30 @@
+name: Public sample request
+description: Request a safe public sample or synthetic fixture.
+title: "[Sample]: "
+labels: ["area:samples", "sample request", "help wanted"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Public samples must follow Current Design (`docs/current-design.md`). They must be synthetic, public-domain, or explicitly authorized, and must contain no private data.
+  - type: textarea
+    id: scenario
+    attributes:
+      label: Scenario
+      description: What workflow should this public sample prove?
+    validations:
+      required: true
+  - type: textarea
+    id: sources
+    attributes:
+      label: Source boundary
+      description: Explain why the material can be shared publicly, or describe how to synthesize it.
+    validations:
+      required: true
+  - type: textarea
+    id: acceptance
+    attributes:
+      label: Acceptance checks
+      description: Which Query Runtime, feedback, package, provider, or Expert behavior should pass?
+    validations:
+      required: true

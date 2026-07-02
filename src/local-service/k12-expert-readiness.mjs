@@ -1,13 +1,17 @@
 import { buildK12SourceScopeGate, k12TemplateId, normalizeDraftList } from "../core/document-scope.mjs";
+import { expertCapabilityKeys, publicExpertSummary, resolveExpertForTemplate } from "./expert-registry.mjs";
 import { currentKnowledgeBaseId, listKnowledgeBases } from "./knowledge-bases.mjs";
 import { nowIso, openCatalogDatabase, parseJson } from "./storage.mjs";
+
+const tocCompletenessTarget = 0.95;
 
 export function readK12ExpertReadinessFromCatalog(state, options = {}) {
   const registry = listKnowledgeBases(state);
   const knowledgeBaseId = String(options.knowledgeBaseId || currentKnowledgeBaseId(state) || "").trim();
   if (!knowledgeBaseId) return emptyReadiness();
   const knowledgeBase = registry.items.find((item) => item.id === knowledgeBaseId) || registry.current || { id: knowledgeBaseId };
-  if (knowledgeBase.template !== k12TemplateId) {
+  const expert = resolveExpertForTemplate(knowledgeBase.template);
+  if (knowledgeBase.template !== k12TemplateId || !expert) {
     return notApplicableReadiness(knowledgeBase);
   }
 
@@ -71,10 +75,11 @@ export function readK12ExpertReadinessFromCatalog(state, options = {}) {
         id: knowledgeBaseId,
         name: knowledgeBase.name || knowledgeBaseId,
         template: knowledgeBase.template || "",
-        expert: "KnowMesh Expert - K12"
+        expert: publicExpertSummary(expert)
       },
       summary: {
         status: readinessStatus(gates, documents.length),
+        expertCapabilities: expertCapabilityKeys(expert),
         documents: documents.length,
         activeDocuments: documents.filter((item) => item.status === "active").length,
         reviewDocuments: documents.filter((item) => item.qualityState === "review").length,
@@ -82,6 +87,9 @@ export function readK12ExpertReadinessFromCatalog(state, options = {}) {
         units: counts.units,
         lessons: counts.lessons,
         tocEntries: counts.tocEntries,
+        tocCompletenessTarget: counts.tocCompletenessTarget,
+        tocCompletenessRate: counts.tocCompletenessRate,
+        tocCompletenessPercent: counts.tocCompletenessPercent,
         knowledgeObjects: objectRows.length,
         chunks: chunkRows.length,
         citations,
@@ -208,10 +216,16 @@ function summarizeDimensions(documents, setupDraft) {
 function summarizeCounts(structureRows, objectRows, chunkRows, indexRecords, citations) {
   const objectTypes = countBy(objectRows, (row) => row.objectType || "unknown");
   const writtenChunkIds = new Set(indexRecords.filter((row) => row.status === "written").map((row) => String(row.chunk_id || "")));
+  const lessons = structureRows.filter((row) => row.nodeType === "lesson").length;
+  const tocEntries = structureRows.filter((row) => row.nodeType === "toc_entry" || row.contentType === "toc_entry").length;
+  const tocCompletenessRate = lessons > 0 ? roundRate(Math.min(tocEntries, lessons) / lessons) : 0;
   return {
     units: structureRows.filter((row) => row.nodeType === "unit").length,
-    lessons: structureRows.filter((row) => row.nodeType === "lesson").length,
-    tocEntries: structureRows.filter((row) => row.nodeType === "toc_entry" || row.contentType === "toc_entry").length,
+    lessons,
+    tocEntries,
+    tocCompletenessTarget,
+    tocCompletenessRate,
+    tocCompletenessPercent: Math.round(tocCompletenessRate * 100),
     indexedChunks: chunkRows.filter((row) => writtenChunkIds.has(row.chunkId)).length,
     objectTypes,
     citationReady: chunkRows.length > 0 && citations >= chunkRows.length
@@ -233,7 +247,7 @@ function summarizeSourceScope(gate = {}) {
 
 function summarizeGates({ sourceScope, counts, activeBuild, release, evaluation }) {
   const sourceScopeReady = sourceScope.status === "pass" && sourceScope.includedDocuments > 0;
-  const tocReady = counts.units > 0 && counts.lessons > 0 && counts.tocEntries > 0;
+  const tocReady = counts.units > 0 && counts.lessons > 0 && counts.tocCompletenessRate >= counts.tocCompletenessTarget;
   const objectReady = ["book", "unit", "lesson"].every((key) => Number(counts.objectTypes[key] || 0) > 0);
   const retrievalReady = counts.indexedChunks > 0 && counts.citationReady && activeBuild?.status === "active" && release?.status === "active";
   const evaluationReady = evaluation.cases > 0 && evaluation.results > 0;
@@ -264,6 +278,10 @@ function buildGaps(gates) {
     .map(([key, status]) => ({ key, status, message: labels[key] || key }));
 }
 
+function roundRate(value) {
+  return Math.round(Number(value || 0) * 10000) / 10000;
+}
+
 function notApplicableReadiness(knowledgeBase) {
   return {
     ok: true,
@@ -275,10 +293,11 @@ function notApplicableReadiness(knowledgeBase) {
       id: knowledgeBase.id || "",
       name: knowledgeBase.name || knowledgeBase.id || "",
       template: knowledgeBase.template || "",
-      expert: ""
+      expert: null
     },
     summary: {
       status: "not_applicable",
+      expertCapabilities: [],
       documents: 0,
       activeDocuments: 0,
       reviewDocuments: 0,
@@ -286,6 +305,9 @@ function notApplicableReadiness(knowledgeBase) {
       units: 0,
       lessons: 0,
       tocEntries: 0,
+      tocCompletenessTarget,
+      tocCompletenessRate: 0,
+      tocCompletenessPercent: 0,
       knowledgeObjects: 0,
       chunks: 0,
       citations: 0,
@@ -313,6 +335,7 @@ function emptyReadiness() {
     knowledgeBase: { id: "", name: "", template: "", expert: "" },
     summary: {
       status: "empty",
+      expertCapabilities: [],
       documents: 0,
       activeDocuments: 0,
       reviewDocuments: 0,
@@ -320,6 +343,9 @@ function emptyReadiness() {
       units: 0,
       lessons: 0,
       tocEntries: 0,
+      tocCompletenessTarget,
+      tocCompletenessRate: 0,
+      tocCompletenessPercent: 0,
       knowledgeObjects: 0,
       chunks: 0,
       citations: 0,

@@ -1,25 +1,28 @@
 name: Bug report
-description: Report a reproducible KnowMesh problem.
+description: Report reproducible KnowMesh behavior without sharing private data.
 title: "[Bug]: "
-labels:
-  - bug
+labels: ["bug"]
 body:
+  - type: markdown
+    attributes:
+      value: |
+        Thanks for helping improve KnowMesh. Please remove secrets, private document text, generated artifacts, and local paths before posting.
   - type: textarea
     id: summary
     attributes:
-      label: Summary
-      description: What went wrong?
+      label: What happened?
+      description: Describe the user-visible behavior.
     validations:
       required: true
   - type: textarea
-    id: steps
+    id: reproduce
     attributes:
       label: Reproduction steps
-      description: List the exact local actions or API calls that reproduce the issue.
+      description: Use public samples when possible.
       placeholder: |
-        1. Run ...
-        2. Open ...
-        3. See ...
+        1. Start KnowMesh...
+        2. Open...
+        3. Run...
     validations:
       required: true
   - type: textarea
@@ -28,22 +31,26 @@ body:
       label: Expected behavior
     validations:
       required: true
-  - type: textarea
-    id: environment
+  - type: input
+    id: version
     attributes:
-      label: Environment
-      description: Include OS, Node.js version, KnowMesh version, and whether this is local demo or Aliyun mode.
-      placeholder: |
-        OS:
-        Node.js:
-        KnowMesh:
-        Mode:
-    validations:
-      required: true
-  - type: textarea
-    id: safety
+      label: KnowMesh version / commit
+      placeholder: "0.1.0-alpha or commit SHA"
+  - type: dropdown
+    id: area
     attributes:
-      label: Sensitive data check
-      description: Confirm you removed secrets, source document text, generated artifacts, and local paths from logs/screenshots.
-    validations:
-      required: true
+      label: Area
+      options:
+        - Web Console
+        - Query Runtime
+        - Build pipeline
+        - K12 Expert
+        - Provider adapter
+        - Platform / launcher
+        - Documentation
+        - Release / package
+  - type: textarea
+    id: evidence
+    attributes:
+      label: Safe evidence
+      description: Paste redacted logs, commands, screenshots, or test output. Do not include secrets or private text.

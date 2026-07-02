@@ -18,6 +18,7 @@ logs/
 tmp/
 .tmp/
 output/
+exports/
 test-results/
 secrets/
 **/secrets/

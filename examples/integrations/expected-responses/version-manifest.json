@@ -1,0 +1,19 @@
+{
+  "contractVersion": "2026-07-query-runtime.1",
+  "kind": "knowmesh.versionManifest",
+  "ok": true,
+  "summary": {
+    "activeBuildId": "build-public-general",
+    "activeReleaseId": "release-public-general"
+  },
+  "versions": [
+    {
+      "buildId": "build-public-general",
+      "status": "active",
+      "release": {
+        "releaseId": "release-public-general",
+        "status": "active"
+      }
+    }
+  ]
+}

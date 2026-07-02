@@ -1,16 +1,18 @@
 import { k12TemplateId } from "../core/document-scope.mjs";
 import { currentKnowledgeBaseId, listKnowledgeBases } from "./knowledge-bases.mjs";
+import { normalizeK12ObjectType } from "./k12-object-contract.mjs";
 import { nowIso, openCatalogDatabase, parseJson } from "./storage.mjs";
 
 const extractableTypes = new Set([
-  "lesson_text",
+  "text",
   "exercise",
   "formula",
   "vocabulary",
-  "vocabulary_table",
   "table",
   "figure",
   "example",
+  "knowledge_point",
+  "answer_explanation",
   "experiment",
   "activity"
 ]);
@@ -76,14 +78,15 @@ function readClassifiedBlocks(db) {
     ORDER BY b.document_id ASC, p.page_number ASC, b.sort_order ASC, b.block_id ASC
   `).all().map((row) => {
     const metadata = parseJson(row.metadata_json, {});
-    const contentType = String(metadata.contentType || row.block_type || "");
+    const rawContentType = String(metadata.contentType || row.block_type || "");
+    const contentType = normalizeK12ObjectType(rawContentType) || rawContentType;
     const pageStart = Number(metadata.page_start || row.page_number || 0) || null;
     const pageEnd = Number(metadata.page_end || pageStart || 0) || pageStart;
     return {
       blockId: String(row.block_id || ""),
       documentId: String(row.document_id || ""),
       blockType: String(row.block_type || ""),
-      contentType: contentType === "vocabulary_table" ? "vocabulary" : contentType,
+      contentType,
       qualityState: String(row.quality_state || "primary"),
       title: String(metadata.title || labelForContentType(contentType)),
       pageStart,
@@ -173,6 +176,7 @@ function publicObject(object) {
 function labelForContentType(contentType) {
   return {
     lesson_text: "Lesson text",
+    text: "Lesson text",
     exercise: "Exercise",
     formula: "Formula",
     vocabulary: "Vocabulary",

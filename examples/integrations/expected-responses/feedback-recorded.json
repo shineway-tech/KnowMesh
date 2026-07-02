@@ -1,0 +1,15 @@
+{
+  "contractVersion": "2026-07-query-runtime.1",
+  "kind": "knowmesh.queryFeedback",
+  "ok": true,
+  "status": "recorded",
+  "feedback": {
+    "action": "useful",
+    "needsReview": false,
+    "resultKey": "result-key-from-query-response"
+  },
+  "links": {
+    "feedbackSummary": "/kb/sample-general-docs/api/query/feedback/summary",
+    "maintenance": "/kb/sample-general-docs/use/feedback"
+  }
+}

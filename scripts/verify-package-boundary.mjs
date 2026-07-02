@@ -4,7 +4,7 @@ import { spawnSync } from "node:child_process";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 
-const privatePathPattern = /(^|\/)(node_modules|workspace|knowledge-bases|\.tmp|\.runtime|secrets|artifacts|logs|tmp|output|test-results)(\/|$)/;
+const privatePathPattern = /(^|\/)(node_modules|workspace|knowledge-bases|\.tmp|\.runtime|secrets|artifacts|logs|tmp|output|exports|test-results|private)(\/|$)/;
 const privateFilePattern = /(^|\/)\.env$|\.test\.mjs$|\.sqlite(?:-shm|-wal)?$|\.tgz$|\.log$|\.tmp$/;
 
 export function evaluatePackageFiles(paths) {

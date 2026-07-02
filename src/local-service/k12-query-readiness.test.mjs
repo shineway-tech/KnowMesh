@@ -24,7 +24,7 @@ test("K12 query readiness reports structure object relation and evaluation route
   assert.equal(readiness.summary.activeDocuments, 1);
   assert.equal(readiness.summary.tocAnchors, 1);
   assert.equal(readiness.summary.objectTypes.vocabulary, 1);
-  assert.equal(readiness.summary.relationTypes.belongs_to_lesson, 1);
+  assert.equal(readiness.summary.relationTypes.lesson_to_vocabulary, 1);
   assert.equal(readiness.routes.firstLessonLookup, "ready");
   assert.equal(readiness.routes.unitLessonLookup, "ready");
   assert.equal(readiness.routes.outOfScopeRefusal, "ready");
@@ -88,8 +88,8 @@ function writeQueryReadinessFixture(state, knowledgeBaseId, options = {}) {
             relation_id, source_object_id, target_object_id, relation_type, document_id, structure_node_id, metadata_json, created_at, updated_at
           ) VALUES (?, ?, ?, ?, 'doc-k12-query-ready', 'lesson-1', '{}', ?, ?)
         `);
-        relationInsert.run("rel-vocabulary-lesson", "object-vocabulary-1", "object-lesson-1", "belongs_to_lesson", now, now);
-        relationInsert.run("rel-formula-exercise", "object-formula-1", "object-exercise-1", "supports_exercise", now, now);
+        relationInsert.run("rel-lesson-vocabulary", "object-lesson-1", "object-vocabulary-1", "lesson_to_vocabulary", now, now);
+        relationInsert.run("rel-formula-exercise", "object-formula-1", "object-exercise-1", "formula_to_exercise", now, now);
         db.prepare(`
           INSERT INTO build_versions (build_id, status, active, parent_build_id, summary_json, created_at, updated_at)
           VALUES ('build-query-ready', 'active', 1, '', '{}', ?, ?)

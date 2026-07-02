@@ -1,0 +1,42 @@
+name: Provider adapter request
+description: Request or scope a parser, OCR, model, embedding, rerank, vector, or object-store adapter.
+title: "[Provider]: "
+labels: ["enhancement", "area:provider", "help wanted"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Provider adapters must follow Current Design (`docs/current-design.md`) and expose capability, dryRun, cost, privacy, and permission boundaries before execution. Use public sample data only.
+  - type: dropdown
+    id: adapter
+    attributes:
+      label: Adapter kind
+      options:
+        - parser
+        - OCR
+        - chat
+        - embedding
+        - rerank
+        - vector
+        - object-store
+    validations:
+      required: true
+  - type: textarea
+    id: capability
+    attributes:
+      label: Capability and boundary
+      description: What operations does this provider support, and what data leaves the device?
+    validations:
+      required: true
+  - type: textarea
+    id: dry-run
+    attributes:
+      label: dryRun expectations
+      description: What should `/api/providers/capabilities` show before execution?
+    validations:
+      required: true
+  - type: textarea
+    id: public-sample
+    attributes:
+      label: Public sample or fixture
+      description: Use a synthetic or public sample. Do not attach private material.

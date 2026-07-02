@@ -4,6 +4,7 @@ import path from "node:path";
 
 import { executeLocalTask, testLocalTask } from "./local-executor.mjs";
 import { syncJobArtifactsToCatalog } from "./artifact-registry.mjs";
+import { publishBuildVersionToCatalog } from "./execution/build-version-publisher.mjs";
 import { syncK12EvaluationForJob } from "./k12-evaluation-runner.mjs";
 import { previewExecutionPlan } from "./plan-preview.mjs";
 import { previewTargetedRerun, targetedRerunWorkspaceRoot } from "./targeted-rerun.mjs";
@@ -679,6 +680,7 @@ function buildTargetedRerunJob(state, preview, input = {}) {
     knowledgeBaseId,
     rerun: {
       target: preview.target,
+      scope: publicRerunScope(preview.rerunScope),
       documents: preview.summary?.documents || 0,
       pages: preview.summary?.pages || 0,
       retryablePages: preview.summary?.retryablePages || 0,
@@ -731,6 +733,26 @@ function buildTargetedRerunJob(state, preview, input = {}) {
     }
   };
   return applyJobIsolation(state, job);
+}
+
+function publicRerunScope(scope = {}) {
+  return {
+    type: scope.target?.type || scope.type || "",
+    qualityIssueIds: Array.isArray(scope.qualityIssueIds) ? scope.qualityIssueIds : [],
+    documentIds: Array.isArray(scope.documentIds) ? scope.documentIds : [],
+    relativePaths: Array.isArray(scope.relativePaths) ? scope.relativePaths : [],
+    pageRanges: Array.isArray(scope.pageRanges)
+      ? scope.pageRanges.map((item) => ({
+          documentId: item.documentId || "",
+          startPage: Number(item.startPage || 0),
+          endPage: Number(item.endPage || 0),
+          pages: Number(item.pages || 0)
+        }))
+      : [],
+    structureNodeIds: Array.isArray(scope.structureNodeIds) ? scope.structureNodeIds : [],
+    chunkIds: Array.isArray(scope.chunkIds) ? scope.chunkIds : [],
+    evaluationCategories: Array.isArray(scope.evaluationCategories) ? scope.evaluationCategories : []
+  };
 }
 
 function buildTargetedRerunExecutionPlan(preview = {}) {
@@ -1238,6 +1260,18 @@ function syncJobBuildVersionToCatalog(db, job) {
   const active = status === "active" ? 1 : 0;
   const createdAt = job.createdAt || nowIso();
   const updatedAt = job.updatedAt || createdAt;
+  if (active && activeManifestPath) {
+    publishBuildVersionToCatalog(db, {
+      buildId,
+      releaseId: `${buildId}:active`,
+      manifestPath: activeManifestPath,
+      manifest: activeManifest,
+      buildSummary: buildVersionSummary(job, activeManifest),
+      releaseSummary: releaseManifestSummary(job, activeManifest),
+      qualityGates: { requireActiveRecords: true, allowReviewRecords: true }
+    });
+    return;
+  }
   if (active) {
     db.prepare("UPDATE build_versions SET active = 0 WHERE build_id <> ?").run(buildId);
   }
@@ -1642,7 +1676,13 @@ function writeJobCheckpoint(state, job, event) {
       status: job.status,
       mode: job.mode,
       template: job.template,
-      progress: job.progress || summarizeTasks(job.tasks || [])
+      progress: job.progress || summarizeTasks(job.tasks || []),
+      ...(job.kind === "knowmesh.targetedRerunJob" ? {
+        targetedRerun: {
+          target: job.targetedRerun?.target || {},
+          scope: publicRerunScope(job.targetedRerun?.rerunScope || {})
+        }
+      } : {})
     },
     task: taskItem ? {
       key: taskItem.key,

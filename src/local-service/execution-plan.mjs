@@ -1,4 +1,4 @@
-import { processingGroupForSourceType } from "../core/source-types.mjs";
+import { buildSourcePreparationPlan } from "./execution/parser-provider.mjs";
 
 export function buildVisibleExecutionPlan(scan, actions, blockers = []) {
   const handling = sourceHandlingCounts(scan);
@@ -204,24 +204,13 @@ function metric(zhLabel, enLabel, value) {
 }
 
 function sourceHandlingCounts(scan) {
-  const counts = {
-    directText: 0,
-    office: 0,
-    autoConvert: 0,
-    ocr: 0
+  const preparation = buildSourcePreparationPlan(scan.manifest.logicalDocuments, { mode: scan.mode });
+  return {
+    directText: preparation.summary.directText,
+    office: preparation.summary.office,
+    autoConvert: preparation.summary.autoConvert,
+    ocr: preparation.summary.ocr
   };
-  for (const document of scan.manifest.logicalDocuments) {
-    if (["text", "markdown", "csv", "tsv", "rtf"].includes(document.sourceType)) {
-      counts.directText += 1;
-    } else if (["docx", "docm", "xlsx", "xlsm", "pptx", "pptm"].includes(document.sourceType)) {
-      counts.office += 1;
-    } else if (processingGroupForSourceType(document.sourceType) === "autoConvert") {
-      counts.autoConvert += 1;
-    } else if (document.sourceType === "image" || document.sourceType.includes("pdf")) {
-      counts.ocr += 1;
-    }
-  }
-  return counts;
 }
 
 function summarizeStages(stages) {

@@ -2,6 +2,8 @@ import { k12TemplateId } from "../core/document-scope.mjs";
 import { currentKnowledgeBaseId, listKnowledgeBases } from "./knowledge-bases.mjs";
 import { nowIso, openCatalogDatabase, parseJson } from "./storage.mjs";
 
+const tocCompletenessTarget = 0.95;
+
 export function readK12StructureReadinessFromCatalog(state, options = {}) {
   const registry = listKnowledgeBases(state);
   const knowledgeBaseId = String(options.knowledgeBaseId || currentKnowledgeBaseId(state) || "").trim();
@@ -143,10 +145,16 @@ function summarizeStructure(documents, nodes, outline) {
   const lessonsWithChunks = allLessons.filter((lesson) => lesson.hasChunk).length;
   const lessonsWithCitations = allLessons.filter((lesson) => lesson.hasCitation).length;
   const unitsWithLessons = outline.reduce((total, document) => total + document.units.filter((unit) => unit.lessons.length > 0).length, 0);
+  const tocCompletenessRate = lessons > 0 ? roundRate(Math.min(tocEntries, lessons) / lessons) : 0;
+  const requiredGates = {
+    tocCompleteness: tocCompletenessRate >= tocCompletenessTarget ? "pass" : "fail",
+    lessonPageRanges: lessons > 0 && lessonsWithPageRange === lessons ? "pass" : "fail",
+    unitLessonLinks: units > 0 && unitsWithLessons === units ? "pass" : "fail"
+  };
   const queryRoutes = {
-    tocLookup: tocEntries > 0 ? "ready" : "blocked",
-    unitLessonLookup: units > 0 && lessons > 0 && lessonsWithPageRange === lessons ? "ready" : "blocked",
-    firstLessonLookup: units > 0 && unitsWithLessons === units ? "ready" : "blocked"
+    tocLookup: requiredGates.tocCompleteness === "pass" ? "ready" : "blocked",
+    unitLessonLookup: requiredGates.lessonPageRanges === "pass" && requiredGates.unitLessonLinks === "pass" ? "ready" : "blocked",
+    firstLessonLookup: requiredGates.unitLessonLinks === "pass" ? "ready" : "blocked"
   };
   return {
     status: readinessStatus(nodes.length, queryRoutes),
@@ -155,16 +163,27 @@ function summarizeStructure(documents, nodes, outline) {
     units,
     lessons,
     tocEntries,
+    tocCompletenessTarget,
+    tocCompletenessRate,
+    tocCompletenessPercent: Math.round(tocCompletenessRate * 100),
     unitsWithLessons,
     lessonsWithPageRange,
     lessonsWithChunks,
     lessonsWithCitations,
+    requiredGates,
     queryRoutes
   };
 }
 
 function buildGaps(summary) {
   const gaps = [];
+  if (summary.requiredGates?.tocCompleteness === "fail") {
+    gaps.push({
+      key: "tocCompleteness",
+      status: "blocked",
+      message: "K12 TOC lookup needs at least 95% lesson-to-TOC coverage."
+    });
+  }
   if (summary.tocEntries === 0) {
     gaps.push({
       key: "tocEntries",
@@ -252,6 +271,10 @@ function numericOrNull(value) {
   return Number.isFinite(number) ? number : null;
 }
 
+function roundRate(value) {
+  return Math.round(Number(value || 0) * 10000) / 10000;
+}
+
 function notApplicableReadiness(knowledgeBase) {
   return {
     ok: true,
@@ -292,10 +315,18 @@ function emptySummary(status) {
     units: 0,
     lessons: 0,
     tocEntries: 0,
+    tocCompletenessTarget,
+    tocCompletenessRate: 0,
+    tocCompletenessPercent: 0,
     unitsWithLessons: 0,
     lessonsWithPageRange: 0,
     lessonsWithChunks: 0,
     lessonsWithCitations: 0,
+    requiredGates: {
+      tocCompleteness: "fail",
+      lessonPageRanges: "fail",
+      unitLessonLinks: "fail"
+    },
     queryRoutes: {
       tocLookup: "blocked",
       unitLessonLookup: "blocked",

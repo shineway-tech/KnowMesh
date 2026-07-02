@@ -1,0 +1,30 @@
+name: Documentation issue
+description: Report unclear docs, missing examples, or translation drift.
+title: "[Docs]: "
+labels: ["documentation"]
+body:
+  - type: input
+    id: page
+    attributes:
+      label: Page or file
+      placeholder: "README.md, docs/getting-started.zh-CN.md, ..."
+    validations:
+      required: true
+  - type: textarea
+    id: issue
+    attributes:
+      label: What is unclear or missing?
+    validations:
+      required: true
+  - type: dropdown
+    id: language
+    attributes:
+      label: Language
+      options:
+        - Chinese
+        - English
+        - Both
+  - type: textarea
+    id: suggestion
+    attributes:
+      label: Suggested fix

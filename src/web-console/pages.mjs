@@ -819,6 +819,23 @@ const copy = {
       template: "模板",
       status: "状态"
     },
+    publicSamples: {
+      title: "先用公开样例试一下",
+      lead: "不需要云密钥，不上传资料，只在本机创建一个 sample-owned 知识库。适合先体验 Query Runtime、引用、诊断和重置。",
+      badge: "无密钥",
+      create: "创建样例",
+      open: "打开提问",
+      reset: "重置样例",
+      ready: "已创建",
+      source: "公开来源",
+      externalCalls: "无外部调用",
+      resetConfirmTitle: "重置这个公开样例？",
+      resetConfirmBody: "只会删除由公开样例向导创建的知识库和本机 sample 数据，不会影响普通知识库。",
+      creating: "正在创建公开样例...",
+      resetting: "正在重置公开样例...",
+      created: "公开样例已创建。",
+      resetDone: "公开样例已重置。"
+    },
     documentsPanel: {
       title: "资料资产",
       lead: "查看当前知识库纳入的原始资料、处理页、分片和引用状态。排除或恢复会在下一次执行时生效。",
@@ -881,7 +898,33 @@ const copy = {
       matched: "找到",
       locatedFile: "已打开并定位文件",
       openedDirectory: "已打开所在目录",
-      locatedSourcePart: "已定位第一个分卷文件"
+      locatedSourcePart: "已定位第一个分卷文件",
+      catalogSearchTitle: "证据搜索",
+      catalogSearchLead: "直接搜索当前知识库已写入的分片、引用和可维护证据。",
+      catalogSearchPlaceholder: "搜索知识点、术语或引用片段",
+      catalogSearchAction: "搜索证据",
+      catalogSearchIncludeReview: "包含待复核分片",
+      catalogSearchIdle: "输入关键词后搜索 catalog 证据。",
+      catalogSearchLoading: "正在搜索证据...",
+      catalogSearchEmpty: "没有找到匹配证据。",
+      catalogSearchFound: "找到证据",
+      catalogSearchPage: "页",
+      catalogSearchOpen: "打开资料",
+      catalogSearchQuality: "质量",
+      catalogSearchDocument: "资料 ID",
+      catalogSearchSourceType: "资料类型",
+      catalogSearchPageStart: "起始页",
+      catalogSearchPageEnd: "结束页",
+      catalogSearchQualityState: "质量状态",
+      catalogSearchStructureNode: "结构节点",
+      catalogSearchAnyQuality: "默认质量",
+      catalogSearchCitationReady: "可引用",
+      catalogSearchNeedsCitation: "缺引用",
+      catalogSearchTitleMatch: "标题匹配",
+      catalogSearchStructureMatch: "结构匹配",
+      catalogSearchFeedbackBoost: "反馈信号",
+      catalogSearchEvidence: "查看证据",
+      catalogSearchDocumentStatus: "资料状态"
     },
 
     integrationPanel: {
@@ -1046,6 +1089,7 @@ const copy = {
         running: "当前有任务正在执行，可以查看实时进度。",
         paused: "任务已暂停，可以进入任务页恢复。",
         failed: "最近任务需要处理，进入任务页查看原因并重试。",
+        sampleReady: "公开样例已可用，可以直接提问、查看引用或重置样例。",
         ready: "知识库已可用，可以提问测试、接入应用或维护资料。"
       },
       actions: {
@@ -1061,17 +1105,17 @@ const copy = {
         integrate: "接入应用",
         maintainDocuments: "维护资料"
       },
-      architectureTitle: "不是普通向量库导入工具",
-      architectureLead: "KnowMesh 把通用流程、行业增强和质量约束拆开，让普通用户能用，也让技术用户能扩展。",
-      architectureSummary: "通用引擎负责稳定处理，专家策略增强行业理解，质量门禁决定哪些内容可以写入知识库。",
+      architectureTitle: "从文件夹到可信答案",
+      architectureLead: "KnowMesh 不只是把资料丢进向量库，而是把来源、处理、复核、引用、版本和接入连成一条可检查的路径。",
+      architectureSummary: "用户能看到资料从哪里来、如何变成知识、哪些内容需要复核，以及答案为什么可信。",
       architecture: [
-        ["SOURCE", "Source Files", "PDF、Word、Excel、Markdown、TXT、图片和扫描资料。"],
-        ["CORE", "KnowMesh Core", "扫描、抽取、OCR、清洗、分片、向量化、写入和恢复。"],
-        ["EXPERT", "KnowMesh Expert", "模板策略和少量行业处理器增强 K12、法律、客服等行业语义。"],
-        ["QUALITY", "Quality Gates", "低置信度、缺引用和范围不匹配的内容不会悄悄进入结果。"],
-        ["TRACE", "Traceable Knowledge", "答案能回到文件、页码、章节或原文片段。"],
-        ["VERSION", "Versioned Knowledge", "资料更新、排除、恢复和重建都有版本记录。"],
-        ["ASSETS", "Knowledge Assets", "向量索引、元数据、来源映射和版本历史一起形成知识资产。"]
+        ["SOURCE", "资料进入", "PDF、Word、Excel、Markdown、TXT、图片和扫描资料。"],
+        ["PROCESS", "生成知识", "扫描、识别、整理、分片和写入都保留可追溯记录。"],
+        ["DOMAIN", "场景增强", "K12 等场景可以加入专门的结构、规则和评测问题。"],
+        ["QUALITY", "质量复核", "低置信度、缺引用和范围不匹配的内容不会悄悄进入结果。"],
+        ["ANSWER", "可追溯回答", "答案能回到文件、页码、章节或原文片段。"],
+        ["VERSION", "版本维护", "资料更新、排除、恢复和重建都有版本记录。"],
+        ["INTEGRATE", "应用接入", "同一套问答接口服务控制台测试和外部应用。"]
       ],
       openSourceText: "MIT License"
     },
@@ -1874,6 +1918,23 @@ const copy = {
       template: "Template",
       status: "Status"
     },
+    publicSamples: {
+      title: "Try a public sample first",
+      lead: "No cloud credentials, no upload, and only a local sample-owned knowledge base. Use it to try Query Runtime, citations, diagnostics, and reset.",
+      badge: "Credential-free",
+      create: "Create Sample",
+      open: "Open Ask",
+      reset: "Reset Sample",
+      ready: "Created",
+      source: "Public source",
+      externalCalls: "No external calls",
+      resetConfirmTitle: "Reset this public sample?",
+      resetConfirmBody: "Only knowledge bases created by the public sample wizard and their local sample data are removed. Ordinary knowledge bases are not touched.",
+      creating: "Creating public sample...",
+      resetting: "Resetting public sample...",
+      created: "Public sample created.",
+      resetDone: "Public sample reset."
+    },
 
     documentsPanel: {
       title: "Source Assets",
@@ -1937,7 +1998,33 @@ const copy = {
       matched: "Matched",
       locatedFile: "File revealed",
       openedDirectory: "Folder opened",
-      locatedSourcePart: "First source part revealed"
+      locatedSourcePart: "First source part revealed",
+      catalogSearchTitle: "Evidence Search",
+      catalogSearchLead: "Search written chunks, citations, and maintainable evidence in this knowledge base.",
+      catalogSearchPlaceholder: "Search concepts, terms, or citation excerpts",
+      catalogSearchAction: "Search Evidence",
+      catalogSearchIncludeReview: "Include review chunks",
+      catalogSearchIdle: "Enter keywords to search catalog evidence.",
+      catalogSearchLoading: "Searching evidence...",
+      catalogSearchEmpty: "No matching evidence found.",
+      catalogSearchFound: "Evidence found",
+      catalogSearchPage: "Page",
+      catalogSearchOpen: "Open Source",
+      catalogSearchQuality: "Quality",
+      catalogSearchDocument: "Document ID",
+      catalogSearchSourceType: "Source type",
+      catalogSearchPageStart: "Page from",
+      catalogSearchPageEnd: "Page to",
+      catalogSearchQualityState: "Quality state",
+      catalogSearchStructureNode: "Structure node",
+      catalogSearchAnyQuality: "Default quality",
+      catalogSearchCitationReady: "Citable",
+      catalogSearchNeedsCitation: "Needs citation",
+      catalogSearchTitleMatch: "Title match",
+      catalogSearchStructureMatch: "Structure match",
+      catalogSearchFeedbackBoost: "Feedback signal",
+      catalogSearchEvidence: "View Evidence",
+      catalogSearchDocumentStatus: "Document status"
     },
 
     integrationPanel: {
@@ -2102,6 +2189,7 @@ const copy = {
         running: "A task is running. Open the task page for live progress.",
         paused: "The latest task is paused. Open the task page to resume.",
         failed: "The latest task needs attention. Inspect the reason and retry the step.",
+        sampleReady: "The public sample is ready. Ask, inspect citations, or reset it.",
         ready: "This knowledge base is ready. Ask, integrate, or maintain sources."
       },
       actions: {
@@ -2117,17 +2205,17 @@ const copy = {
         integrate: "Integrate App",
         maintainDocuments: "Manage Sources"
       },
-      architectureTitle: "More than vector-store import",
-      architectureLead: "KnowMesh separates the universal pipeline, domain intelligence, and quality constraints so users can run it and contributors can extend it.",
-      architectureSummary: "Core runs the stable workflow, Expert adds domain strategy, and Quality Gates decide what can be written.",
+      architectureTitle: "From folders to trusted answers",
+      architectureLead: "KnowMesh does more than push files into a vector store. It connects source, processing, review, citations, versions, and integration into one inspectable path.",
+      architectureSummary: "Users can see where knowledge came from, how it was compiled, what needs review, and why an answer is trustworthy.",
       architecture: [
-        ["SOURCE", "Source Files", "PDF, Word, Excel, Markdown, TXT, images, and scanned sources."],
-        ["CORE", "KnowMesh Core", "Scanning, extraction, OCR, cleaning, chunking, embedding, writing, and recovery."],
-        ["EXPERT", "KnowMesh Expert", "Template strategies and focused processors for education, legal, support, and more."],
-        ["QUALITY", "Quality Gates", "Low-confidence, missing-citation, or out-of-scope content is not silently mixed in."],
-        ["TRACE", "Traceable Knowledge", "Answers point back to files, pages, sections, or source snippets."],
-        ["VERSION", "Versioned Knowledge", "Updates, exclusions, restores, and rebuilds keep version records."],
-        ["ASSETS", "Knowledge Assets", "Vector indexes, metadata, source mapping, and history become maintainable assets."]
+        ["SOURCE", "Source Intake", "PDF, Word, Excel, Markdown, TXT, images, and scanned sources."],
+        ["PROCESS", "Compile Knowledge", "Scanning, recognition, cleanup, chunking, and writing keep trace records."],
+        ["DOMAIN", "Scenario Boost", "K12 and other scenarios can add dedicated structure, rules, and evaluation questions."],
+        ["QUALITY", "Review Quality", "Low-confidence, missing-citation, or out-of-scope content is not silently mixed in."],
+        ["ANSWER", "Cited Answers", "Answers point back to files, pages, sections, or source snippets."],
+        ["VERSION", "Maintain Versions", "Updates, exclusions, restores, and rebuilds keep version records."],
+        ["INTEGRATE", "Connect Apps", "The same question API serves console tests and external applications."]
       ],
       openSourceText: "MIT License"
     },
@@ -2881,6 +2969,7 @@ function renderWelcomePage({ service }) {
           ${renderWelcomeStatePanel(welcomeState)}
         </aside>
       </section>
+      ${renderPublicSampleWizard(service, { context: "welcome" })}
       <section class="welcome-architecture" data-welcome-architecture>
         <h2 class="visually-hidden" data-i18n="welcome.architectureTitle">${escapeHtml(copy.zh.welcome.architectureTitle)}</h2>
         <div class="welcome-architecture-map" aria-label="KnowMesh architecture">
@@ -2906,6 +2995,7 @@ function buildWelcomeState(service = {}) {
   const knowledgeBaseStatus = String(current?.status || "").toLowerCase();
   const status = latestJobStatus || knowledgeBaseStatus;
   const hasCurrent = Boolean(current?.id);
+  const isPublicSample = Boolean(current?.setupSummary?.publicSample || current?.setupSummary?.publicSampleId);
   const isRunning = ["running", "pausing"].includes(latestJobStatus);
   const isPaused = latestJobStatus === "paused";
   const isFailed = ["failed", "blocked"].includes(latestJobStatus);
@@ -2939,10 +3029,10 @@ function buildWelcomeState(service = {}) {
       secondaryText = copy.zh.welcome.actions.editSetup;
       secondaryHref = scopedPagePath(service, "/setup/mode");
       } else if (isReady) {
-        stateKey = "ready";
+        stateKey = isPublicSample ? "sampleReady" : "ready";
         primaryKey = "welcome.actions.openConsole";
         primaryText = copy.zh.welcome.actions.openConsole;
-        primaryHref = scopedPagePath(service, "/overview");
+        primaryHref = scopedPagePath(service, isPublicSample ? "/use/ask" : "/overview");
       } else if (isConfigured) {
       stateKey = "configured";
       primaryKey = "welcome.actions.continueBuild";
@@ -3057,8 +3147,61 @@ function renderWelcomeStatePanel(welcomeState) {
           </div>`;
 }
 
+function renderPublicSampleWizard(service = {}, options = {}) {
+  const samples = Array.isArray(service.publicSamples?.samples) ? service.publicSamples.samples : [];
+  if (!samples.length) return "";
+  const labels = copy.zh.publicSamples;
+  const modifier = options.context ? ` public-sample-wizard--${escapeHtml(options.context)}` : "";
+  return `<section class="public-sample-wizard${modifier}" data-public-sample-wizard>
+            <header>
+              <span class="card-kicker" data-i18n="publicSamples.badge">${escapeHtml(labels.badge)}</span>
+              <h2 data-i18n="publicSamples.title">${escapeHtml(labels.title)}</h2>
+              <p data-i18n="publicSamples.lead">${escapeHtml(labels.lead)}</p>
+            </header>
+            <div class="public-sample-grid">
+              ${samples.map((sample) => renderPublicSampleCard(sample, service)).join("\n              ")}
+            </div>
+          </section>`;
+}
+
+function renderPublicSampleCard(sample = {}, service = {}) {
+  const labels = copy.zh.publicSamples;
+  const existingId = sample.existingKnowledgeBaseId || "";
+  const summary = localizedValue(sample.summary, "zh") || sample.title || sample.id;
+  const sourceRoot = sample.sourceRoot || "";
+  const askHref = existingId ? scopedPagePath({ ...service, basePath: `/kb/${existingId}` }, "/use/ask") : "";
+  return `<article class="public-sample-card" data-public-sample-id="${escapeHtml(sample.id || "")}" data-public-sample-ready="${existingId ? "true" : "false"}">
+            <div>
+              <span>${escapeHtml(sample.template || "")}</span>
+              <strong>${escapeHtml(sample.title || sample.id || "")}</strong>
+              <p>${escapeHtml(summary)}</p>
+            </div>
+            <dl>
+              <div>
+                <dt data-i18n="publicSamples.source">${escapeHtml(labels.source)}</dt>
+                <dd title="${escapeHtml(sourceRoot)}">${escapeHtml(sourceRoot)}</dd>
+              </div>
+              <div>
+                <dt data-i18n="publicSamples.externalCalls">${escapeHtml(labels.externalCalls)}</dt>
+                <dd>${sample.externalCalls ? "cloud" : "local"}</dd>
+              </div>
+            </dl>
+            <div class="public-sample-actions">
+              ${existingId
+                ? `<a class="secondary-action sample-action" href="${escapeHtml(askHref)}" data-i18n="publicSamples.open">${escapeHtml(labels.open)}</a>
+                   <button class="secondary-action quiet-action" type="button" data-public-sample-reset="${escapeHtml(existingId)}" data-i18n="publicSamples.reset">${escapeHtml(labels.reset)}</button>`
+                : `<button class="secondary-action sample-action" type="button" data-public-sample-create="${escapeHtml(sample.id)}" data-i18n="publicSamples.create">${escapeHtml(labels.create)}</button>`}
+            </div>
+          </article>`;
+}
+
+function localizedValue(value, lang = "zh") {
+  if (!value || typeof value !== "object") return "";
+  return value[lang] || value.zh || value.en || "";
+}
+
 function welcomeStatusClass(stateKey) {
-  if (stateKey === "ready") return "success";
+  if (stateKey === "ready" || stateKey === "sampleReady") return "success";
   if (stateKey === "running") return "running";
   if (stateKey === "failed") return "danger";
   if (stateKey === "paused") return "warn";
@@ -3070,7 +3213,7 @@ function welcomeProgressForState(stateKey) {
   if (stateKey === "draft") return 18;
   if (stateKey === "configured") return 36;
   if (stateKey === "running" || stateKey === "paused" || stateKey === "failed") return 62;
-  if (stateKey === "ready") return 100;
+  if (stateKey === "ready" || stateKey === "sampleReady") return 100;
   return 0;
 }
 
@@ -4299,6 +4442,7 @@ function renderSetupNote(route, card, index, step) {
 function renderConsoleMainContent(route, content, page, service = {}) {
   if (route.key === "overview") {
     return `${renderOverviewStatusPanel(service)}
+        ${renderPublicSampleWizard(service, { context: "overview" })}
         ${renderOverviewBuildFlow(content, page)}`;
   }
   if (route.key === "knowledge-bases") {
@@ -4416,6 +4560,37 @@ function renderDocumentManagement(service = {}) {
           </div>
           <div class="document-result-summary" data-document-result-summary aria-live="polite"></div>
           <div class="document-change-banner" data-document-change hidden></div>
+          <section class="catalog-search-panel" data-catalog-search data-catalog-search-endpoint="${apiEndpoint(service, "/api/search")}">
+            <header class="catalog-search-head">
+              <div>
+                <h3 data-i18n="documentsPanel.catalogSearchTitle">${escapeHtml(labels.catalogSearchTitle)}</h3>
+                <p data-i18n="documentsPanel.catalogSearchLead">${escapeHtml(labels.catalogSearchLead)}</p>
+              </div>
+            </header>
+            <form class="catalog-search-form" data-catalog-search-form>
+              <input type="search" data-catalog-search-query data-i18n-placeholder="documentsPanel.catalogSearchPlaceholder" placeholder="${escapeHtml(labels.catalogSearchPlaceholder)}">
+              <label class="catalog-search-review">
+                <input type="checkbox" data-catalog-search-include-review>
+                <span data-i18n="documentsPanel.catalogSearchIncludeReview">${escapeHtml(labels.catalogSearchIncludeReview)}</span>
+              </label>
+              <button class="secondary-action" type="submit" data-catalog-search-run data-i18n="documentsPanel.catalogSearchAction">${escapeHtml(labels.catalogSearchAction)}</button>
+              <div class="catalog-search-filters">
+                <input type="text" data-catalog-search-document data-i18n-placeholder="documentsPanel.catalogSearchDocument" placeholder="${escapeHtml(labels.catalogSearchDocument)}">
+                <input type="text" data-catalog-search-source-type data-i18n-placeholder="documentsPanel.catalogSearchSourceType" placeholder="${escapeHtml(labels.catalogSearchSourceType)}">
+                <input type="number" min="1" step="1" data-catalog-search-page-start data-i18n-placeholder="documentsPanel.catalogSearchPageStart" placeholder="${escapeHtml(labels.catalogSearchPageStart)}">
+                <input type="number" min="1" step="1" data-catalog-search-page-end data-i18n-placeholder="documentsPanel.catalogSearchPageEnd" placeholder="${escapeHtml(labels.catalogSearchPageEnd)}">
+                <select data-catalog-search-quality-state aria-label="${escapeHtml(labels.catalogSearchQualityState)}">
+                  <option value="" data-i18n="documentsPanel.catalogSearchAnyQuality">${escapeHtml(labels.catalogSearchAnyQuality)}</option>
+                  <option value="primary">primary</option>
+                  <option value="review">review</option>
+                  <option value="archive">archive</option>
+                </select>
+                <input type="text" data-catalog-search-structure-node data-i18n-placeholder="documentsPanel.catalogSearchStructureNode" placeholder="${escapeHtml(labels.catalogSearchStructureNode)}">
+              </div>
+            </form>
+            <div class="catalog-search-summary" data-catalog-search-summary aria-live="polite">${escapeHtml(labels.catalogSearchIdle)}</div>
+            <div class="catalog-search-results" data-catalog-search-result></div>
+          </section>
           <div class="document-list" data-document-list aria-live="polite">
             <div class="document-empty">
               <strong data-i18n="documentsPanel.loading">${escapeHtml(labels.loading)}</strong>
@@ -5689,7 +5864,8 @@ function renderKnowledgeBaseManagement(service = {}) {
             <p data-i18n="knowledgeBases.emptyBody">${escapeHtml(labels.emptyBody)}</p>
             <button class="primary-action" type="button" data-knowledge-base-create data-i18n="knowledgeBases.create">${escapeHtml(labels.create)}</button>
           </div>
-        </section>`;
+        </section>
+        ${renderPublicSampleWizard(service, { context: "knowledge-bases" })}`;
   }
   return `<section class="knowledge-base-manager" data-knowledge-base-library>
           <header class="knowledge-base-manager-head">
@@ -5703,7 +5879,8 @@ function renderKnowledgeBaseManagement(service = {}) {
           <div class="knowledge-base-manager-list">
             ${items.map((item) => renderKnowledgeBaseManagementItem(item, current?.id === item.id, service)).join("\n            ")}
           </div>
-        </section>`;
+        </section>
+        ${renderPublicSampleWizard(service, { context: "knowledge-bases" })}`;
 }
 
 function renderKnowledgeBaseManagementItem(item, isCurrent, service = {}) {
@@ -5865,6 +6042,7 @@ function buildPageState({ pageType, service, active, activeSetupStep }) {
     version: service.version,
     setupState: service.setupState || {},
     knowledgeBases: service.knowledgeBases || { ok: true, current: null, items: [] },
+    publicSamples: service.publicSamples || { ok: true, samples: [] },
     defaultProjectFolders: service.defaultProjectFolders || {},
     credentialLocations: service.credentialLocations || {},
     setupSteps,

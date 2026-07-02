@@ -14,6 +14,7 @@ const storageKeys = {
 };
 
 const setupSnapshot = pageState.setupState && typeof pageState.setupState === "object" ? pageState.setupState : {};
+const hasInitialKnowledgeBase = Boolean(pageState.knowledgeBases?.current?.id);
 const initialTemplateIds = (pageState.templates || []).map((template) => template.id);
 const draftState = readDraft(setupSnapshot.draft || {});
 let modelCatalog = pageState.aliyunModelCatalog || {};
@@ -135,7 +136,9 @@ if (Object.keys(setupSnapshot).length) {
 applyAll();
 bindControls();
 loadTemplates();
-loadSetupState().finally(() => {
+const setupStateRequest = hasInitialKnowledgeBase ? loadSetupState() : Promise.resolve();
+if (!hasInitialKnowledgeBase) setupStateLoaded = true;
+setupStateRequest.finally(() => {
   restorePersistentSetupActionResult();
   restorePersistentBuildResults();
 });
@@ -250,6 +253,7 @@ function bindControls() {
   bindK12RangeControls();
   bindKnowledgeBaseLibrary();
   bindDocumentManagement();
+  bindCatalogEvidenceSearch();
   bindDocumentAssetViewer();
   bindQueryFeedbackActions();
   bindQueryFeedbackResolveActions();
@@ -754,6 +758,56 @@ function bindKnowledgeBaseLibrary() {
       }
     });
   });
+
+  document.querySelectorAll("[data-public-sample-create]").forEach((button) => {
+    button.addEventListener("click", async () => {
+      const sampleId = button.dataset.publicSampleCreate;
+      if (!sampleId) return;
+      button.disabled = true;
+      try {
+        const response = await fetch("/api/public-samples/create", {
+          method: "POST",
+          headers: { "content-type": "application/json", accept: "application/json" },
+          body: JSON.stringify({ sampleId })
+        });
+        const data = await response.json();
+        if (!response.ok || data.ok === false) throw new Error(data.error?.message || data.error || "sample create failed");
+        showToast(translate("publicSamples.created") || (settings.lang === "zh" ? "公开样例已创建。" : "Public sample created."), "pass");
+        window.setTimeout(() => { window.location.href = scopedPathForKnowledgeBase(data.knowledgeBase?.id, "/use/ask"); }, 120);
+      } catch (error) {
+        button.disabled = false;
+        showToast(error instanceof Error ? error.message : String(error), "fail");
+      }
+    });
+  });
+
+  document.querySelectorAll("[data-public-sample-reset]").forEach((button) => {
+    button.addEventListener("click", async () => {
+      const knowledgeBaseId = button.dataset.publicSampleReset;
+      if (!knowledgeBaseId) return;
+      const ok = await showConfirmDialog({
+        title: translate("publicSamples.resetConfirmTitle") || (settings.lang === "zh" ? "重置这个公开样例？" : "Reset this public sample?"),
+        body: translate("publicSamples.resetConfirmBody") || (settings.lang === "zh" ? "只会删除由公开样例向导创建的知识库和本机 sample 数据，不会影响普通知识库。" : "Only sample-owned data is removed."),
+        confirmLabel: translate("publicSamples.reset") || (settings.lang === "zh" ? "重置样例" : "Reset Sample")
+      });
+      if (!ok) return;
+      button.disabled = true;
+      try {
+        const response = await fetch("/api/public-samples/reset", {
+          method: "POST",
+          headers: { "content-type": "application/json", accept: "application/json" },
+          body: JSON.stringify({ knowledgeBaseId })
+        });
+        const data = await response.json();
+        if (!response.ok || data.ok === false) throw new Error(data.error?.message || data.error || "sample reset failed");
+        showToast(translate("publicSamples.resetDone") || (settings.lang === "zh" ? "公开样例已重置。" : "Public sample reset."), "pass");
+        window.setTimeout(() => { window.location.href = scopedPath("/knowledge-bases"); }, 120);
+      } catch (error) {
+        button.disabled = false;
+        showToast(error instanceof Error ? error.message : String(error), "fail");
+      }
+    });
+  });
 }
 
 function bindGlobalDisclosures() {
@@ -943,6 +997,72 @@ function bindDocumentManagement() {
 
   if (resultSummary) resultSummary.textContent = translate("documentsPanel.loading");
   loadDocuments({ reset: true }).catch((error) => showDocumentEmpty(root, error instanceof Error ? error.message : String(error)));
+}
+
+function bindCatalogEvidenceSearch() {
+  const root = document.querySelector("[data-catalog-search]");
+  if (!root) return;
+  const form = root.querySelector("[data-catalog-search-form]");
+  const queryInput = root.querySelector("[data-catalog-search-query]");
+  const includeReviewInput = root.querySelector("[data-catalog-search-include-review]");
+  const runButton = root.querySelector("[data-catalog-search-run]");
+  const initialQuery = new URLSearchParams(window.location.search).get("evidence") || "";
+  if (queryInput && initialQuery) queryInput.value = initialQuery;
+
+  async function runCatalogSearch() {
+    const query = String(queryInput?.value || "").trim();
+    if (!query) {
+      renderCatalogSearchIdle(root);
+      queryInput?.focus?.();
+      return;
+    }
+    const params = new URLSearchParams();
+    params.set("query", query);
+    params.set("limit", "8");
+    if (includeReviewInput?.checked) {
+      params.set("purpose", "maintenance");
+      params.set("includeReview", "true");
+    }
+    [
+      ["documentId", "[data-catalog-search-document]"],
+      ["sourceType", "[data-catalog-search-source-type]"],
+      ["pageStart", "[data-catalog-search-page-start]"],
+      ["pageEnd", "[data-catalog-search-page-end]"],
+      ["structureNodeId", "[data-catalog-search-structure-node]"]
+    ].forEach(([key, selector]) => catalogSearchOptionalField(root, params, key, selector));
+    const qualityState = String(root.querySelector("[data-catalog-search-quality-state]")?.value || "").trim();
+    if (qualityState) params.set("qualityState", qualityState);
+    const endpoint = root.dataset.catalogSearchEndpoint || "/api/search";
+    const url = `${endpoint}${endpoint.includes("?") ? "&" : "?"}${params.toString()}`;
+    root.dataset.loading = "true";
+    if (runButton) runButton.disabled = true;
+    renderCatalogSearchLoading(root);
+    try {
+      const data = await fetchCatalogSearchPayload(url);
+      renderCatalogSearchResults(root, data, { query, includeReview: includeReviewInput?.checked === true });
+    } catch (error) {
+      renderCatalogSearchError(root, error instanceof Error ? error.message : String(error));
+    } finally {
+      delete root.dataset.loading;
+      if (runButton) runButton.disabled = false;
+    }
+  }
+
+  form?.addEventListener("submit", (event) => {
+    event.preventDefault();
+    runCatalogSearch().catch((error) => renderCatalogSearchError(root, error instanceof Error ? error.message : String(error)));
+  });
+
+  if (initialQuery) {
+    runCatalogSearch().catch((error) => renderCatalogSearchError(root, error instanceof Error ? error.message : String(error)));
+  } else {
+    renderCatalogSearchIdle(root);
+  }
+}
+
+function catalogSearchOptionalField(root, params, key, selector) {
+  const value = String(root.querySelector(selector)?.value || "").trim();
+  if (value) params.set(key, value);
 }
 
 function bindDocumentAssetViewer() {
@@ -1142,6 +1262,101 @@ async function fetchDocumentPayload(endpoint, options = {}) {
   const data = await response.json();
   if (!response.ok || data.ok === false) throw new Error(data.error || data.scanError || "documents failed");
   return data;
+}
+
+async function fetchCatalogSearchPayload(endpoint, options = {}) {
+  const response = await fetch(endpoint, { headers: { accept: "application/json", ...(options.headers || {}) }, ...options });
+  const data = await response.json();
+  if (!response.ok || data.ok === false) throw new Error(data.error || data.reason || "catalog search failed");
+  return data;
+}
+
+function renderCatalogSearchIdle(root) {
+  const summary = root.querySelector("[data-catalog-search-summary]");
+  const result = root.querySelector("[data-catalog-search-result]");
+  if (summary) summary.textContent = translate("documentsPanel.catalogSearchIdle");
+  if (result) result.innerHTML = "";
+}
+
+function renderCatalogSearchLoading(root) {
+  const summary = root.querySelector("[data-catalog-search-summary]");
+  const result = root.querySelector("[data-catalog-search-result]");
+  if (summary) summary.textContent = translate("documentsPanel.catalogSearchLoading");
+  if (result) result.innerHTML = "";
+}
+
+function renderCatalogSearchError(root, message) {
+  const summary = root.querySelector("[data-catalog-search-summary]");
+  const result = root.querySelector("[data-catalog-search-result]");
+  if (summary) summary.innerHTML = `<strong>${escapeHtml(translate("integrationPanel.resultError"))}</strong><span>${escapeHtml(message || "catalog search failed")}</span>`;
+  if (result) result.innerHTML = "";
+}
+
+function renderCatalogSearchResults(root, data, state = {}) {
+  const summary = root.querySelector("[data-catalog-search-summary]");
+  const result = root.querySelector("[data-catalog-search-result]");
+  const total = Number(data.total || 0);
+  const query = data.query?.text || state.query || "";
+  if (summary) {
+    summary.innerHTML = total
+      ? `<strong>${escapeHtml(translate("documentsPanel.catalogSearchFound"))} ${escapeHtml(total)}</strong><span>${escapeHtml(query)}</span>`
+      : `<strong>${escapeHtml(translate("documentsPanel.catalogSearchEmpty"))}</strong><span>${escapeHtml(query)}</span>`;
+  }
+  if (!result) return;
+  const items = Array.isArray(data.items) ? data.items : [];
+  result.innerHTML = items.length
+    ? items.map((item) => renderCatalogSearchItem(item)).join("")
+    : `<div class="document-empty"><strong>${escapeHtml(translate("documentsPanel.catalogSearchEmpty"))}</strong></div>`;
+  scheduleOverflowTooltips();
+}
+
+function renderCatalogSearchItem(item = {}) {
+  const title = item.title || item.source?.relativePath || item.documentId || item.chunkId || "";
+  const citation = item.citation || {};
+  const rankingSignals = item.rankingSignals || {};
+  const pageNumber = citation.pageNumber ?? item.pageNumber ?? "";
+  const qualityState = item.qualityState || "";
+  const sourceType = item.source?.type || item.metadata?.sourceType || "";
+  const sourcePath = item.source?.relativePath || citation.relativePath || item.source?.uri || "";
+  const href = item.links?.asset || item.links?.document || "";
+  const evidenceHref = item.links?.evidence || item.links?.diagnostics || "";
+  const citationReady = rankingSignals.citationReady === true || Boolean(citation.citationId);
+  const evidenceState = citationReady ? "ready" : "needs-citation";
+  const pageLabel = pageNumber ? `${translate("documentsPanel.catalogSearchPage")} ${pageNumber}` : "";
+  const openLink = href
+    ? `<a class="secondary-action quiet-action" href="${escapeHtml(href)}" data-catalog-search-open>${escapeHtml(translate("documentsPanel.catalogSearchOpen"))}</a>`
+    : "";
+  const evidenceLink = evidenceHref
+    ? `<a class="secondary-action quiet-action" href="${escapeHtml(evidenceHref)}" data-catalog-search-evidence>${escapeHtml(translate("documentsPanel.catalogSearchEvidence"))}</a>`
+    : "";
+  const signalChips = catalogSearchSignalChips(rankingSignals, citationReady);
+  return `<article class="catalog-search-item" data-quality-state="${escapeHtml(qualityState)}" data-catalog-search-evidence-state="${escapeHtml(evidenceState)}">
+      <div class="catalog-search-item-main">
+        <strong title="${escapeHtml(title)}">${escapeHtml(title)}</strong>
+        <code title="${escapeHtml(sourcePath)}">${escapeHtml(sourcePath)}</code>
+        <p>${escapeHtml(item.excerpt || "")}</p>
+      </div>
+      <div class="catalog-search-meta">
+        <span>${escapeHtml(translate("documentsPanel.catalogSearchQuality"))}: ${escapeHtml(qualityState || "-")}</span>
+        <span>${escapeHtml(sourceType || "-")}</span>
+        ${pageLabel ? `<span>${escapeHtml(pageLabel)}</span>` : ""}
+        ${rankingSignals.documentStatus ? `<span>${escapeHtml(translate("documentsPanel.catalogSearchDocumentStatus"))}: ${escapeHtml(rankingSignals.documentStatus)}</span>` : ""}
+      </div>
+      ${signalChips ? `<div class="catalog-search-signals">${signalChips}</div>` : ""}
+      <div class="catalog-search-actions">
+        ${openLink}
+        ${evidenceLink}
+      </div>
+    </article>`;
+}
+
+function catalogSearchSignalChips(rankingSignals = {}, citationReady = false) {
+  const chips = [];
+  chips.push(citationReady ? translate("documentsPanel.catalogSearchCitationReady") : translate("documentsPanel.catalogSearchNeedsCitation"));
+  if (rankingSignals.titleMatch) chips.push(translate("documentsPanel.catalogSearchTitleMatch"));
+  if (rankingSignals.structureMatch) chips.push(translate("documentsPanel.catalogSearchStructureMatch"));
+  if (Number(rankingSignals.feedbackBoost || 0) > 0) chips.push(`${translate("documentsPanel.catalogSearchFeedbackBoost")} ${Number(rankingSignals.feedbackBoost || 0)}`);
+  return chips.map((chip) => `<span>${escapeHtml(chip)}</span>`).join("");
 }
 
 function updateDocumentPanel(root, state, data, options = {}) {
@@ -1560,7 +1775,11 @@ function requiredSetupFieldsForStep(stepKey) {
   return {
     "aliyun-account": ["aliyun.account.method"],
     "aliyun-credential": ["aliyun.credential.accessKeyId", "aliyun.credential.accessKeySecret", "aliyun.credential.saveTarget"],
-    project: ["project.source", "project.workspace", "metadata.stage", "metadata.subject", "metadata.grade"]
+    project: [
+      "project.source",
+      "project.workspace",
+      ...(sourceScopeRequiredForTemplate(settings.template) ? sourceScopeRequiredKeys : [])
+    ]
   }[stepKey] || [];
 }
 
@@ -2550,10 +2769,10 @@ function inferCompletedSetupStepsFromDraft(draft = draftState, mode = settings.m
     if (draft["aliyun.search.configured"] || (draft["aliyun.search.bucket"] && draft["aliyun.search.index"])) completed.add("aliyun-search");
   }
 
-  const template = draft["template.id"] || draft.template || settings.template;
+  const template = draft["template.id"] || draft["project.template"] || draft.template || settings.template;
   if (initialTemplateIds.includes(template)) completed.add("template");
   if (draft["retrieval.strategy.configured"]) completed.add("retrieval");
-  if (draft["project.source"] && draft["project.workspace"] && sourceScopeLooksComplete(draft)) completed.add("project");
+  if (draft["project.source"] && draft["project.workspace"] && sourceScopeLooksComplete(draft, template)) completed.add("project");
   if (completed.has("project") && completed.has("retrieval") && (normalizedMode !== "aliyun" || completed.has("aliyun-search"))) completed.add("environment");
 
   if (draft["setup.mode"] === mode && draft["setup.finished"] === true && setupConfigurationReady(completed, mode)) {
@@ -6448,6 +6667,7 @@ function renderMaintenanceStatus(maintenance) {
   const templateContract = maintenance.templateContract || null;
   const platformRuntime = maintenance.platformRuntime || null;
   const providerCapabilities = maintenance.providerCapabilities || null;
+  const providerDiagnostics = maintenance.providerDiagnostics || null;
   const labels = settings.lang === "zh"
     ? {
         title: "维护状态",
@@ -6477,6 +6697,7 @@ function renderMaintenanceStatus(maintenance) {
             ${renderMaintenanceProgress(progress)}
             ${renderPlatformRuntime(platformRuntime)}
             ${renderProviderCapabilities(providerCapabilities)}
+            ${renderProviderDiagnostics(providerDiagnostics)}
             ${renderMaintenanceDiagnostics(diagnostics)}
             ${renderMaintenanceTemplateContract(templateContract)}
             ${renderMaintenanceUpdateGate(updateGate)}
@@ -6562,16 +6783,80 @@ function renderProviderCapabilities(capabilities) {
           </section>`;
 }
 
+function renderProviderDiagnostics(diagnostics) {
+  if (!diagnostics) return "";
+  const summary = diagnostics.summary || {};
+  const manifest = diagnostics.manifestReadiness || {};
+  const dryRun = diagnostics.dryRun || {};
+  const retryability = Array.isArray(diagnostics.retryability) ? diagnostics.retryability : [];
+  const warnings = Array.isArray(diagnostics.costPrivacyWarnings) ? diagnostics.costPrivacyWarnings : [];
+  const actions = Array.isArray(diagnostics.nextActions) ? diagnostics.nextActions : [];
+  const labels = settings.lang === "zh"
+    ? {
+        title: "供应商诊断",
+        manifests: "已登记能力",
+        dryRun: "预检查",
+        externalCalls: "执行前外部调用",
+        retryability: "可恢复批次",
+        costPrivacy: "成本/隐私提醒",
+        nextActions: "下一步",
+        ready: "就绪",
+        attention: "需确认",
+        noActions: "暂无需要处理的供应商动作。"
+      }
+    : {
+        title: "Provider Health",
+        manifests: "Registered Capabilities",
+        dryRun: "Preflight",
+        externalCalls: "External Calls Before Execution",
+        retryability: "Recoverable Batches",
+        costPrivacy: "Cost/Privacy Warnings",
+        nextActions: "Next Actions",
+        ready: "Ready",
+        attention: "Review",
+        noActions: "No provider action is needed."
+      };
+  const status = summary.status === "ready" ? labels.ready : labels.attention;
+  const checkpointed = retryability.filter((item) => item.checkpointed).length;
+  const externalWarnings = warnings.filter((item) => item.dataLeavesDevice || item.storesSource || item.storesVectors).length;
+  return `<section class="provider-diagnostics-panel" data-provider-diagnostics data-status="${escapeHtml(summary.status || "attention")}">
+            <header>
+              <strong>${escapeHtml(labels.title)}</strong>
+              <b>${escapeHtml(status)}</b>
+            </header>
+            <div class="provider-diagnostics-grid">
+              <span><b>${escapeHtml(manifest.total || summary.adapterManifests || 0)}</b><em>${escapeHtml(labels.manifests)}</em></span>
+              <span><b>${escapeHtml(dryRun.status || "-")}</b><em>${escapeHtml(labels.dryRun)}</em></span>
+              <span><b>${escapeHtml(summary.externalCallsBeforeExecution || 0)}</b><em>${escapeHtml(labels.externalCalls)}</em></span>
+              <span><b>${escapeHtml(checkpointed)}</b><em>${escapeHtml(labels.retryability)}</em></span>
+              <span><b>${escapeHtml(externalWarnings)}</b><em>${escapeHtml(labels.costPrivacy)}</em></span>
+            </div>
+            <div class="provider-diagnostics-actions">
+              <strong>${escapeHtml(labels.nextActions)}</strong>
+              ${actions.length ? `<ul>${actions.map((item) => `<li>
+                <b>${escapeHtml(localized(item.label))}</b>
+                <span>${escapeHtml(localized(item.message))}</span>
+              </li>`).join("")}</ul>` : `<p>${escapeHtml(labels.noActions)}</p>`}
+            </div>
+          </section>`;
+}
+
 function renderPlatformRuntime(runtime) {
   if (!runtime) return "";
   const checks = runtime.summary?.checks || {};
   const dependencies = runtime.dependencies || {};
+  const providerAdapters = dependencies.providerAdapters || {};
   const dependencyItems = [
     dependencyItem("packageDependencies", dependencies.packageDependencies),
     dependencyItem("fileOpen", dependencies.fileOpen),
+    dependencyItem("folderPicker", dependencies.folderPicker),
+    dependencyItem("fileReveal", dependencies.fileReveal),
     dependencyItem("runtimeDownloader", dependencies.runtimeDownloader),
     dependencyItem("officeConverter", dependencies.officeConverter),
-    dependencyItem("pdfRenderer", dependencies.pdfRenderer)
+    dependencyItem("pdfRenderer", dependencies.pdfRenderer),
+    dependencyItem("localParserAdapter", providerAdapters.localParser),
+    dependencyItem("localOcrAdapter", providerAdapters.localOcr),
+    dependencyItem("localVectorProvider", providerAdapters.localVector)
   ].filter(Boolean);
   const actions = Array.isArray(runtime.guidedActions) ? runtime.guidedActions : [];
   const labels = settings.lang === "zh"
@@ -6642,16 +6927,26 @@ function dependencyItem(key, item) {
     ? {
         packageDependencies: "应用依赖",
         fileOpen: "打开文件夹",
+        folderPicker: "目录选择",
+        fileReveal: "定位文件",
         runtimeDownloader: "运行时下载",
         officeConverter: "旧格式转换",
-        pdfRenderer: "PDF 拆页"
+        pdfRenderer: "PDF 拆页",
+        localParserAdapter: "本地解析器",
+        localOcrAdapter: "本地 OCR",
+        localVectorProvider: "本地向量"
       }
     : {
         packageDependencies: "App Dependencies",
         fileOpen: "Open Folder",
+        folderPicker: "Folder Picker",
+        fileReveal: "Reveal File",
         runtimeDownloader: "Runtime Download",
         officeConverter: "Legacy Conversion",
-        pdfRenderer: "PDF Rendering"
+        pdfRenderer: "PDF Rendering",
+        localParserAdapter: "Local Parser",
+        localOcrAdapter: "Local OCR",
+        localVectorProvider: "Local Vector"
       };
   return {
     key,
@@ -6925,6 +7220,19 @@ function renderVersionRecordCard(item = {}, labels) {
   const write = item.write || {};
   const targetText = [target.provider, target.bucket, target.indexName].filter(Boolean).join(" / ") || labels.noTarget;
   const sidecarReady = sidecar.status === "ready";
+  const rollbackReady = item.rollbackReady !== false;
+  const rollbackReason = localized(item.rollbackReason) || "";
+  const rollbackButton = item.active
+    ? ""
+    : rollbackReady
+      ? `<button type="button"
+                data-console-api-action="version-rollback-preview"
+                data-version-build-id="${escapeHtml(item.id || "")}"
+                data-api-result-key="version-records"
+                data-api-endpoint="/api/versions/rollback/preview"
+                data-api-loading-zh="正在生成回滚预览..."
+                data-api-loading-en="Preparing rollback preview...">${escapeHtml(labels.rollback)}</button>`
+      : `<button type="button" disabled title="${escapeHtml(rollbackReason)}">${escapeHtml(labels.rollback)}</button>`;
   return `<article class="version-record-card" data-active="${item.active ? "true" : "false"}">
             <header>
               <div>
@@ -6947,14 +7255,9 @@ function renderVersionRecordCard(item = {}, labels) {
                 data-api-endpoint="/api/versions/diff?targetBuildId=${encodeURIComponent(item.id || "")}"
                 data-api-loading-zh="正在比较版本..."
                 data-api-loading-en="Comparing versions...">${escapeHtml(labels.diff)}</button>
-              ${item.active ? "" : `<button type="button"
-                data-console-api-action="version-rollback-preview"
-                data-version-build-id="${escapeHtml(item.id || "")}"
-                data-api-result-key="version-records"
-                data-api-endpoint="/api/versions/rollback/preview"
-                data-api-loading-zh="正在生成回滚预览..."
-                data-api-loading-en="Preparing rollback preview...">${escapeHtml(labels.rollback)}</button>`}
+              ${rollbackButton}
             </div>
+            ${!item.active && rollbackReason ? `<p class="version-record-rollback-reason">${escapeHtml(rollbackReason)}</p>` : ""}
           </article>`;
 }
 
@@ -7039,6 +7342,7 @@ function renderEvaluationDashboard(data = {}) {
   const failureGroups = Array.isArray(data.failureGroups) ? data.failureGroups : [];
   const recentBuilds = Array.isArray(data.recentBuilds) ? data.recentBuilds : [];
   const nextActions = Array.isArray(data.nextActions) ? data.nextActions : [];
+  const releaseGate = data.releaseGate || {};
   const knowledgeBase = data.knowledgeBase || {};
   const labels = settings.lang === "zh"
     ? {
@@ -7056,6 +7360,10 @@ function renderEvaluationDashboard(data = {}) {
         nextActions: "下一步",
         noFailures: "没有失败或待复核评测。",
         noRecent: "还没有构建评测结果。",
+        releaseGate: "发布门禁",
+        blocksPublish: "阻断发布",
+        publishReady: "可发布",
+        trend: "趋势",
         missing: "缺失",
         review: "待复核",
         passed: "通过",
@@ -7077,6 +7385,10 @@ function renderEvaluationDashboard(data = {}) {
         nextActions: "Next Actions",
         noFailures: "No failed or review evaluation result.",
         noRecent: "No build evaluation result yet.",
+        releaseGate: "Release Gate",
+        blocksPublish: "Blocks publish",
+        publishReady: "Publish ready",
+        trend: "Trend",
         missing: "Missing",
         review: "Review",
         passed: "Passed",
@@ -7096,6 +7408,7 @@ function renderEvaluationDashboard(data = {}) {
                 <strong>${escapeHtml(labels.title)}</strong>
                 <p>${escapeHtml(labels.empty)}</p>
               </section>
+              ${renderEvaluationReleaseGate(releaseGate, labels)}
               ${renderEvaluationActions(nextActions, labels)}
             </section>`;
   }
@@ -7115,11 +7428,45 @@ function renderEvaluationDashboard(data = {}) {
               ${renderEvaluationMetric(labels.missing, summary.missing || 0)}
               ${renderEvaluationMetric(labels.activeBuild, summary.activeBuildId || "-")}
             </div>
+            ${renderEvaluationReleaseGate(releaseGate, labels)}
             ${renderEvaluationCategories(categories, labels)}
             ${renderEvaluationFailures(failureGroups, labels)}
             ${renderEvaluationRecentBuilds(recentBuilds, labels)}
             ${renderEvaluationActions(nextActions, labels)}
           </section>`;
+}
+
+function renderEvaluationReleaseGate(gate = {}, labels) {
+  if (!gate || typeof gate !== "object") return "";
+  const checks = Array.isArray(gate.checks) ? gate.checks : [];
+  const trend = gate.trend || {};
+  const missing = Array.isArray(gate.missingRequiredCategories) ? gate.missingRequiredCategories : [];
+  const trendParts = [];
+  if (trend.currentBuildId || trend.previousBuildId) {
+    trendParts.push(`${labels.passRate}: ${formatSignedNumber(trend.passRateDelta || 0)}%`);
+    trendParts.push(`${labels.failed}: ${formatSignedNumber(trend.failedDelta || 0)}`);
+  }
+  return `<section class="evaluation-release-gate" data-status="${escapeHtml(gate.status || "empty")}">
+            <header>
+              <div>
+                <strong>${escapeHtml(labels.releaseGate)}</strong>
+                <span>${escapeHtml(gate.blocksPublish ? labels.blocksPublish : labels.publishReady)}</span>
+              </div>
+              <em>${escapeHtml(evaluationStatusLabel(gate.status || "empty"))}</em>
+            </header>
+            ${trendParts.length ? `<p>${escapeHtml(`${labels.trend}: ${trendParts.join(" / ")}`)}</p>` : ""}
+            ${missing.length ? `<p>${escapeHtml(`${labels.missing}: ${missing.slice(0, 8).join(", ")}${missing.length > 8 ? "..." : ""}`)}</p>` : ""}
+            ${checks.length ? `<ul>${checks.map((item) => `<li data-status="${escapeHtml(item.status || "review")}">
+              <span>${escapeHtml(localized(item.label) || item.key || "")}</span>
+              <b>${escapeHtml(item.value || "")}</b>
+              <em>${escapeHtml(evaluationStatusLabel(item.status || "review"))}</em>
+            </li>`).join("")}</ul>` : ""}
+          </section>`;
+}
+
+function formatSignedNumber(value) {
+  const number = Number(value || 0);
+  return number > 0 ? `+${number}` : String(number);
 }
 
 function renderEvaluationMetric(label, value) {
@@ -8371,7 +8718,7 @@ function inferSetupModeFromServer(data) {
 
 function inferSetupTemplateFromServer(data) {
   const draft = data?.draft || {};
-  const explicit = draft["template.id"] || draft.template;
+  const explicit = draft["template.id"] || draft["project.template"] || draft.template;
   if (initialTemplateIds.includes(explicit)) return explicit;
   if (Array.isArray(draft["metadata.stage"]) || Array.isArray(draft["metadata.subject"]) || Array.isArray(draft["metadata.grade"])) {
     if (initialTemplateIds.includes("textbook-cn-k12")) return "textbook-cn-k12";
@@ -8379,7 +8726,12 @@ function inferSetupTemplateFromServer(data) {
   return initialTemplateIds.includes(settings.template) ? settings.template : pageState.defaultTemplateId;
 }
 
-function sourceScopeLooksComplete(draft) {
+function sourceScopeRequiredForTemplate(templateId = settings.template) {
+  return templateId === "textbook-cn-k12";
+}
+
+function sourceScopeLooksComplete(draft, templateId = settings.template) {
+  if (!sourceScopeRequiredForTemplate(templateId)) return true;
   return sourceScopeRequiredKeys.every((key) => Array.isArray(draft[key]) ? draft[key].length > 0 : Boolean(draft[key]));
 }
 
@@ -8979,7 +9331,7 @@ function inferInitialSetupMode(data, fallback) {
 
 function inferInitialSetupTemplate(data, fallback) {
   const draft = data?.draft || {};
-  const explicit = draft["template.id"] || draft.template;
+  const explicit = draft["template.id"] || draft["project.template"] || draft.template;
   if (initialTemplateIds.includes(explicit)) return explicit;
   return initialTemplateIds.includes(fallback) ? fallback : initialTemplateIds[0] || "";
 }

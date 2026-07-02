@@ -13,14 +13,15 @@ import {
 import { getRetrievalMethods } from "../core/retrieval-strategy-catalog.mjs";
 import { getTemplate } from "../core/templates.mjs";
 import { getObject, queryVectors } from "./aliyun.mjs";
-import { readCatalogChunks } from "./content-catalog.mjs";
 import { readCatalogIndexChunks } from "./index-records.mjs";
 import { latestJob } from "./jobs.mjs";
 import { currentKnowledgeBaseId, listKnowledgeBases } from "./knowledge-bases.mjs";
-import { routeK12QueryFromCatalog } from "./k12-query-router.mjs";
+import { queryRouteAnswerPolicy, queryRouteContractVersion } from "./query-route-contract.mjs";
 import { planQueryRoute } from "./query-route-planner.mjs";
 import { evaluateQueryQualityGates } from "./query-quality-gates.mjs";
-import { routeStructureQueryFromCatalog } from "./query-structure-route.mjs";
+import { retrieveQueryEvidence } from "./query-evidence.mjs";
+import { searchCatalog } from "./catalog-search.mjs";
+import { buildPublicSampleAnswer, isPublicSampleKnowledgeBase } from "./public-samples.mjs";
 import { readAliyunCredentials, readAliyunModelProvider, readSetupState } from "./setup-store.mjs";
 import { openCatalogDatabase } from "./storage.mjs";
 
@@ -258,6 +259,9 @@ export async function runValidation(state, options = {}) {
 }
 
 export async function answerQuestion(state, options = {}) {
+  const refusalRouteAnswer = answerRefusalRoute(state, options);
+  if (refusalRouteAnswer) return refusalRouteAnswer;
+
   const catalogRouteAnswer = await answerK12CatalogRoute(state, options);
   if (catalogRouteAnswer) return catalogRouteAnswer;
   const structureRouteAnswer = await answerStructureCatalogRoute(state, options);
@@ -349,11 +353,183 @@ export async function answerQuestion(state, options = {}) {
   };
 }
 
+function answerRefusalRoute(state, options = {}) {
+  const question = String(options.question || options.query || options.draft?.["ask.question"] || "").trim();
+  if (!question) return null;
+  const routePlan = planQueryRoute(state, { question, template: options.template });
+  if (routePlan.route?.key !== "reject") return null;
+
+  const setupState = readSetupState(state);
+  const strategy = buildValidationStrategy(setupState);
+  const queryPlan = buildRefusalQueryPlan(routePlan, question, strategy);
+  const result = validationResultFromRefusalRoute(routePlan, queryPlan);
+  const validationRun = buildRefusalValidationRun(routePlan, result, queryPlan, strategy);
+  const answerRun = buildAnswerRun(validationRun, [result], {
+    modelProvider: null,
+    model: ""
+  });
+  return {
+    ok: false,
+    status: routePlan.status || "out_of_scope",
+    checks: refusalRouteChecks(routePlan),
+    fixes: [],
+    validationPreview: buildRefusalValidationPreview(routePlan, queryPlan, strategy),
+    validationRun,
+    answerRun
+  };
+}
+
+function buildRefusalQueryPlan(routePlan = {}, question = "", strategy = {}) {
+  return {
+    questionKey: "adhoc-1",
+    methods: ["scopeCheck", "refusal"],
+    original: question,
+    normalized: normalizeQuestion(question),
+    scope: routePlan.scope?.summary || routePlan.understanding?.scope?.summary || { zh: "超出当前知识库范围", en: "Outside the current knowledge-base scope" },
+    missingScope: {},
+    queries: [],
+    subQuestions: [],
+    hypothetical: "",
+    stepBack: "",
+    filter: null,
+    rerank: false,
+    citationRequired: true,
+    noAnswerPolicy: strategy.noAnswer || "refuse_without_sources",
+    route: {
+      intent: routePlan.intent || "out_of_scope",
+      source: "none",
+      tableOrder: []
+    },
+    contract: routePlan.contract || null
+  };
+}
+
+function validationResultFromRefusalRoute(routePlan = {}, queryPlan = {}) {
+  const status = routePlan.status || "out_of_scope";
+  return {
+    key: "adhoc-1",
+    source: "adHoc",
+    question: queryPlan.original || "",
+    queryPlan,
+    scope: queryPlan.scope,
+    rejectedMatches: [],
+    status,
+    answerStatus: status,
+    citationStatus: "skipped",
+    confidence: 1,
+    message: routePlan.understanding?.scope?.summary || { zh: "问题超出当前知识库范围，已拒绝回答。", en: "The question is outside the current knowledge-base scope and was refused." },
+    answerPreview: {
+      zh: "问题超出当前知识库范围，KnowMesh 不会检索或生成答案。",
+      en: "The question is outside the current knowledge-base scope, so KnowMesh does not retrieve or answer."
+    },
+    retrieval: {
+      source: "none",
+      route: routePlan.intent || "out_of_scope",
+      scanned: 0,
+      acceptedCitations: 0,
+      rejectedCitations: 0,
+      refusal: routePlan.contract?.refusal || null
+    },
+    understanding: routePlan.understanding || null,
+    feedbackActions: queryFeedbackActions(),
+    citations: [],
+    evidencePack: evidencePackFromCitations(routePlan.route?.key || "reject", [])
+  };
+}
+
+function buildRefusalValidationRun(routePlan = {}, result = {}, queryPlan = {}, strategy = {}) {
+  const current = routePlan.knowledgeBase || {};
+  return {
+    template: current.template ? { id: current.template, title: current.name || "" } : { id: "general-docs", title: "" },
+    strategy,
+    source: {
+      kind: "queryRoute",
+      path: "catalog://query-route-contract",
+      label: { zh: "查询范围路由", en: "Query scope route" }
+    },
+    summary: {
+      totalQuestions: 1,
+      templateQuestions: 0,
+      adHocQuestions: 1,
+      passed: 0,
+      failed: 1,
+      citationPass: 0,
+      citationMissing: 0,
+      reviewRequired: 0
+    },
+    rules: [
+      rule("scope", "范围先行", "Scope first", "越界问题在检索前拒答。", "Out-of-scope questions are refused before retrieval."),
+      rule("citation", "无引用泄漏", "No citation leakage", "拒答结果不能携带无关引用。", "Refusals must not carry unrelated citations."),
+      rule("noWeakAnswer", "不生成弱答案", "No weak answer", "证据不足时不把泛泛解释标记为成功。", "Weak unsupported responses are not counted as successful answers.")
+    ],
+    queryPlans: [queryPlan],
+    results: [result],
+    artifacts: [],
+    route: routePlan.route || null
+  };
+}
+
+function buildRefusalValidationPreview(routePlan = {}, queryPlan = {}, strategy = {}) {
+  return {
+    template: routePlan.knowledgeBase?.template ? { id: routePlan.knowledgeBase.template, title: routePlan.knowledgeBase.name || "" } : { id: "general-docs", title: "" },
+    strategy,
+    summary: {
+      totalQuestions: 1,
+      templateQuestions: 0,
+      adHocQuestions: 1,
+      includeTemplateQuestions: false,
+      ready: false
+    },
+    rules: [
+      rule("scope", "范围先行", "Scope first", "越界问题在检索前拒答。", "Out-of-scope questions are refused before retrieval.")
+    ],
+    queryPlans: [queryPlan],
+    questions: [{
+      key: "adhoc-1",
+      source: "adHoc",
+      question: queryPlan.original || "",
+      queryPlan,
+      status: "blocked",
+      citationStatus: "skipped",
+      message: routePlan.understanding?.scope?.summary || null
+    }]
+  };
+}
+
+function refusalRouteChecks(routePlan = {}) {
+  return [
+    check(
+      "queryRoute",
+      "fail",
+      "查询范围",
+      "Query scope",
+      "问题超出当前知识库范围，已在检索前拒绝。",
+      "The question is outside the current knowledge-base scope and was refused before retrieval."
+    ),
+    check(
+      "citations",
+      "pass",
+      "引用边界",
+      "Citation boundary",
+      "拒答结果没有携带无关引用。",
+      "The refusal did not include unrelated citations."
+    ),
+    check(
+      "answer",
+      "fail",
+      "回答生成",
+      "Answer generation",
+      routePlan.contract?.refusal?.status === "out_of_scope" ? "越界问题不会生成答案。" : "当前问题没有足够证据生成答案。",
+      routePlan.contract?.refusal?.status === "out_of_scope" ? "Out-of-scope questions do not generate answers." : "The question does not have enough evidence to generate an answer."
+    )
+  ];
+}
+
 async function answerK12CatalogRoute(state, options = {}) {
   if (!isK12QueryContext(state, options)) return null;
   const question = String(options.question || options.query || options.draft?.["ask.question"] || "").trim();
   if (!question) return null;
-  const routeResult = routeK12QueryFromCatalog(state, { question });
+  const routeResult = await retrieveQueryEvidence(state, { question, template: defaultTemplateId });
   if (!shouldUseK12CatalogRoute(routeResult)) return null;
 
   const setupState = readSetupState(state);
@@ -479,7 +655,8 @@ function validationResultFromK12CatalogRoute(routeResult = {}, queryPlan = {}, c
     },
     understanding: buildQuestionUnderstanding(constraints, queryPlan),
     feedbackActions: queryFeedbackActions(),
-    citations
+    citations,
+    evidencePack: routeResult.evidencePack || evidencePackFromCitations("k12Catalog", citations)
   };
 }
 
@@ -640,8 +817,8 @@ async function answerStructureCatalogRoute(state, options = {}) {
   if (!question) return null;
   const routePlan = planQueryRoute(state, { question, template: options.template });
   if (routePlan.route?.key !== "structureCatalog") return null;
-  const routeResult = routeStructureQueryFromCatalog(state, { question });
-  if (routeResult.status !== "evidence_found") return null;
+  const routeResult = await retrieveQueryEvidence(state, { question, template: options.template || "general-docs" });
+  if (routeResult.status !== "evidence_found" || routeResult.retrieval?.source !== "structureCatalog") return null;
 
   const setupState = readSetupState(state);
   const strategy = buildValidationStrategy(setupState);
@@ -724,7 +901,8 @@ function validationResultFromStructureCatalogRoute(routeResult = {}, queryPlan =
       filter: {}
     },
     feedbackActions: queryFeedbackActions(),
-    citations
+    citations,
+    evidencePack: routeResult.evidencePack || evidencePackFromCitations("structureCatalog", citations)
   };
 }
 
@@ -836,6 +1014,20 @@ async function answerValidationResult(state, result, options = {}) {
   }
 
   const modelProvider = options.modelProvider;
+  if (isPublicSampleKnowledgeBase(state)) {
+    const answer = buildPublicSampleAnswer(result);
+    if (answer) {
+      return {
+        ...result,
+        status: "answered",
+        answer,
+        message: { zh: "已基于公开样例引用生成本地答案。", en: "Local answer generated from public sample citations." },
+        missingInfo: [],
+        fixes: []
+      };
+    }
+  }
+
   if (!modelProvider?.apiKey || modelProvider.protocol !== "openai-compatible") {
     return {
       ...result,
@@ -1165,13 +1357,15 @@ function resolveValidationSource(state, job) {
       reportPath: workspaceRoot ? path.join(workspaceRoot, "artifacts", "reports", "query-evidence.report.json") : ""
     };
   }
-  const catalogContentChunks = readCatalogChunks(state);
-  if (catalogContentChunks.length) {
+  const catalogSearchProbe = searchCatalog(state, { limit: 1, purpose: "queryEvidence" });
+  if (catalogSearchProbe.ok && catalogSearchProbe.total > 0) {
     return {
-      kind: "catalogChunks",
-      path: "catalog://chunks",
-      label: { zh: "Catalog 知识片段", en: "Catalog chunks" },
-      chunks: catalogContentChunks,
+      kind: "catalogSearch",
+      path: "catalog://search",
+      label: { zh: "Catalog 证据搜索", en: "Catalog evidence search" },
+      state,
+      knowledgeBaseId: currentKnowledgeBaseId(state),
+      catalogTotal: catalogSearchProbe.total,
       reportPath: workspaceRoot ? path.join(workspaceRoot, "artifacts", "reports", "query-evidence.report.json") : ""
     };
   }
@@ -1461,6 +1655,10 @@ async function validateQuestionsFromSource(preview, source) {
   });
   let scanned = 0;
 
+  if (source?.kind === "catalogSearch") {
+    return validateQuestionsFromCatalogSearch(trackers, source);
+  }
+
   for await (const chunk of readValidationChunks(source)) {
     scanned += 1;
     for (const tracker of trackers) {
@@ -1472,6 +1670,72 @@ async function validateQuestionsFromSource(preview, source) {
   return {
     scanned,
     results: trackers.map((tracker) => validationResultFromMatches(tracker))
+  };
+}
+
+function validateQuestionsFromCatalogSearch(trackers, source) {
+  let scanned = 0;
+  for (const tracker of trackers) {
+    const result = searchCatalog(source.state, {
+      knowledgeBaseId: source.knowledgeBaseId,
+      query: catalogSearchTextForTracker(tracker),
+      purpose: "queryEvidence",
+      limit: 24
+    });
+    const items = Array.isArray(result.items) ? result.items : [];
+    tracker.retrieval = {
+      source: "catalogSearch",
+      catalogMatches: Number(result.total || 0),
+      scanned: items.length
+    };
+    scanned += items.length;
+    for (const item of items) {
+      const chunk = catalogSearchItemToValidationChunk(item);
+      if (!chunk) continue;
+      const score = scoreChunk(chunk, tracker);
+      if (score > 0) pushTopMatch(tracker.matches, { chunk, score });
+    }
+  }
+  return {
+    scanned,
+    results: trackers.map((tracker) => validationResultFromMatches(tracker))
+  };
+}
+
+function catalogSearchTextForTracker(tracker) {
+  const queryPlan = tracker.queryPlan || {};
+  return [
+    queryPlan.normalized || queryPlan.original || localizedText(tracker.question?.question),
+    ...(queryPlan.queries || []),
+    ...(queryPlan.subQuestions || []),
+    queryPlan.hypothetical || "",
+    queryPlan.stepBack || ""
+  ].map((item) => String(item || "").trim()).filter(Boolean).join(" ");
+}
+
+function catalogSearchItemToValidationChunk(item = {}) {
+  const excerpt = String(item.excerpt || "").trim();
+  if (!excerpt) return null;
+  const citation = item.citation || {};
+  const source = item.source || {};
+  const metadata = item.metadata || {};
+  const pageNumber = citation.pageNumber ?? item.pageNumber ?? metadata.pageStart ?? null;
+  const sourceUri = citation.sourceUri || source.uri || metadata.sourceUri || source.relativePath || "";
+  return {
+    chunk_id: item.chunkId || "",
+    document_id: item.documentId || "",
+    version_id: metadata.versionId || "",
+    text: excerpt,
+    sourceUri,
+    sourceParts: [],
+    metadata: {
+      ...metadata,
+      title: item.title || citation.sourceLabel || "",
+      sourceUri,
+      sourceType: source.type || metadata.sourceType || "",
+      pageNumber,
+      contentType: metadata.contentType || ""
+    }
   };
 }
 
@@ -1551,6 +1815,7 @@ function validationResultFromMatches(tracker) {
   const passed = matches.length > 0;
   const rejected = tracker.rejected || [];
   const blockedByScope = !passed && rejected.length > 0;
+  const citations = matches.map(({ chunk }) => citationFromChunk(chunk, tracker.terms, tracker.constraints));
   return {
     key: tracker.question.key,
     source: tracker.question.source,
@@ -1585,7 +1850,35 @@ function validationResultFromMatches(tracker) {
       : null,
     understanding: buildQuestionUnderstanding(tracker.constraints, tracker.queryPlan),
     feedbackActions: queryFeedbackActions(),
-    citations: matches.map(({ chunk }) => citationFromChunk(chunk, tracker.terms, tracker.constraints))
+    citations,
+    evidencePack: evidencePackFromCitations("catalogSearch", citations)
+  };
+}
+
+function evidencePackFromCitations(routeKey, citations = []) {
+  return {
+    version: queryRouteContractVersion,
+    answerPolicy: queryRouteAnswerPolicy,
+    routeKey,
+    source: routeKey,
+    status: citations.length ? "ready" : "empty",
+    items: citations.map((citation) => ({
+      chunkId: citation.chunk_id || citation.id || "",
+      citationId: citation.citationId || citation.id || citation.chunk_id || "",
+      documentId: citation.document_id || citation.documentId || "",
+      documentStatus: citation.metadata?.documentStatus || "",
+      qualityState: citation.metadata?.qualityState || "",
+      structureNodeId: citation.structureNodeId || citation.structure_node_id || citation.metadata?.structureNodeId || "",
+      structurePath: citation.metadata?.structurePath || "",
+      rankingSignals: citation.rankingSignals || {},
+      sourceAnchor: {
+        sourceUri: citation.sourceUri || citation.metadata?.sourceUri || "",
+        relativePath: citation.metadata?.relativePath || "",
+        pageNumber: citation.pageNumber ?? citation.metadata?.pageNumber ?? null,
+        anchor: citation.anchor || citation.metadata?.anchor || ""
+      },
+      links: citation.links || {}
+    }))
   };
 }
 
