@@ -908,6 +908,7 @@ test("local service reports port fallback details for first-run startup", async 
     assert.equal(fallback.requestedPort, occupied.port);
     assert.equal(fallback.portChanged, true);
     assert.notEqual(fallback.port, occupied.port);
+    assert.ok(fallback.port >= 20000 && fallback.port < 44100);
     assert.equal(body.port, fallback.port);
     assert.equal(body.requestedPort, occupied.port);
     assert.equal(body.portChanged, true);
@@ -6547,8 +6548,6 @@ function assertOssV4SignatureMatches(request, options) {
 function hmacSha256(key, value) {
   return crypto.createHmac("sha256", key).update(value, "utf8").digest();
 }
-
-
 
 
 

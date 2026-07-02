@@ -92,6 +92,9 @@ import {
 
 const defaultHost = "127.0.0.1";
 const defaultPort = 7457;
+const internalPortStart = 20000;
+const internalPortSpan = 24000;
+const internalPortAttempts = 512;
 
 export async function startLocalService(options = {}) {
   const projectRoot = options.projectRoot || process.cwd();
@@ -139,38 +142,49 @@ export function openBrowser(url) {
 }
 
 async function listenWithFallback(state, options) {
-  const startPort = options.port === 0 ? pickInternalPortStart() : options.port;
-  const maxAttempts = options.port === 0 ? 80 : 20;
+  if (Number(options.port) === 0) return listenOnAvailableInternalPort(state, options);
 
-  for (let offset = 0; offset < maxAttempts; offset += 1) {
-    const requestedPort = startPort + offset;
-    const server = createLocalServiceServer(state);
+  try {
+    return await listenOnPort(state, options, options.port);
+  } catch (error) {
+    if (error?.code !== "EADDRINUSE") throw error;
+    return listenOnAvailableInternalPort(state, options);
+  }
+}
 
+async function listenOnAvailableInternalPort(state, options) {
+  const startOffset = Math.floor(Math.random() * internalPortSpan);
+  let lastError = null;
+
+  for (let attempt = 0; attempt < internalPortAttempts; attempt += 1) {
+    const port = internalPortStart + ((startOffset + attempt) % internalPortSpan);
     try {
-      await listen(server, options.host, requestedPort);
-      const address = server.address();
-      const actualPort = typeof address === "object" && address ? address.port : requestedPort;
-      state.port = actualPort;
-      const url = `http://${options.host}:${actualPort}`;
-      return {
-        server,
-        host: options.host,
-        requestedPort: options.port,
-        port: actualPort,
-        portChanged: Number(options.port) > 0 && Number(actualPort) !== Number(options.port),
-        url,
-        close: () => close(server)
-      };
+      return await listenOnPort(state, options, port);
     } catch (error) {
-      if (error?.code !== "EADDRINUSE" || offset === maxAttempts - 1) throw error;
+      lastError = error;
+      if (!["EADDRINUSE", "EACCES"].includes(error?.code)) throw error;
     }
   }
 
-  throw new Error("Unable to start KnowMesh local service.");
+  throw lastError || new Error("Unable to start KnowMesh local service.");
 }
 
-function pickInternalPortStart() {
-  return 20000 + Math.floor(Math.random() * 24000);
+async function listenOnPort(state, options, listenPort) {
+  const server = createLocalServiceServer(state);
+  await listen(server, options.host, listenPort);
+  const address = server.address();
+  const actualPort = typeof address === "object" && address ? address.port : listenPort;
+  state.port = actualPort;
+  const url = `http://${options.host}:${actualPort}`;
+  return {
+    server,
+    host: options.host,
+    requestedPort: options.port,
+    port: actualPort,
+    portChanged: Number(options.port) > 0 && Number(actualPort) !== Number(options.port),
+    url,
+    close: () => close(server)
+  };
 }
 
 function listen(server, host, port) {
@@ -1713,8 +1727,6 @@ function contentType(file) {
   if (ext === ".json") return "application/json; charset=utf-8";
   return "application/octet-stream";
 }
-
-
 
 
 
