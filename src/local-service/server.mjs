@@ -1457,7 +1457,7 @@ function buildMaintenanceDiagnosticExport(state) {
       summary: publicJobSummary(latest.job.summary)
     } : null
   };
-  if (!current) return redactMaintenanceDiagnostics(baseDiagnostics);
+  if (!current) return redactMaintenanceDiagnostics(baseDiagnostics, state);
 
   const sourceManifest = readSourceManifestFromCatalog(state);
   const extractionManifest = readExtractionManifestFromCatalog(state);
@@ -1592,7 +1592,7 @@ function buildMaintenanceDiagnosticExport(state) {
       byAction: feedback.feedback?.byAction || {},
       openByAction: feedback.feedback?.openByAction || {}
     }
-  });
+  }, state);
 }
 
 function publicJobSummary(summary = {}) {
@@ -1623,30 +1623,54 @@ function publicJobSummary(summary = {}) {
   return result;
 }
 
-function redactMaintenanceDiagnostics(value) {
-  return redactDiagnosticValue(value);
+function redactMaintenanceDiagnostics(value, state = {}) {
+  return redactDiagnosticValue(value, "", diagnosticRedactionRoots(state));
 }
 
-function redactDiagnosticValue(value, key = "") {
-  if (Array.isArray(value)) return value.map((item) => redactDiagnosticValue(item, key));
+function redactDiagnosticValue(value, key = "", roots = []) {
+  if (Array.isArray(value)) return value.map((item) => redactDiagnosticValue(item, key, roots));
   if (!value || typeof value !== "object") {
-    return typeof value === "string" ? redactDiagnosticString(value, key) : value;
+    return typeof value === "string" ? redactDiagnosticString(value, key, roots) : value;
   }
   return Object.fromEntries(
     Object.entries(value).map(([entryKey, entryValue]) => [
       entryKey,
-      redactDiagnosticValue(entryValue, entryKey)
+      redactDiagnosticValue(entryValue, entryKey, roots)
     ])
   );
 }
 
-function redactDiagnosticString(value, key = "") {
+function redactDiagnosticString(value, key = "", roots = []) {
   if (/access[_-]?key|secret|token|api[_-]?key|credential/i.test(key)) return "[redacted-secret]";
   const text = String(value || "");
-  if (/[A-Za-z]:[\\/]/.test(text) || /(^|[^\w/])\/(?:Users|home)\//.test(text) || /(^|[^\\])\\Users\\/i.test(text)) {
+  if (containsDiagnosticRoot(text, roots) || /[A-Za-z]:[\\/]/.test(text) || /(^|[^\w/])\/(?:Users|home)\//.test(text) || /(^|[^\\])\\Users\\/i.test(text)) {
     return "[redacted-local-path]";
   }
   return text;
+}
+
+function diagnosticRedactionRoots(state = {}) {
+  const candidates = [
+    state.projectRoot,
+    state.userDataRoot,
+    state.runtimeRoot,
+    process.env.KNOWMESH_RUNTIME_DIR
+  ];
+  const roots = [];
+  for (const candidate of candidates) {
+    if (typeof candidate !== "string" || !candidate.trim()) continue;
+    roots.push(path.resolve(candidate));
+  }
+  return [...new Set(roots.map(normalizeDiagnosticPathText).filter((item) => item.length >= 4))];
+}
+
+function containsDiagnosticRoot(value, roots = []) {
+  const text = normalizeDiagnosticPathText(value);
+  return roots.some((root) => root && text.includes(root));
+}
+
+function normalizeDiagnosticPathText(value) {
+  return String(value || "").replaceAll("\\", "/").replace(/\/+/g, "/").replace(/\/$/, "");
 }
 
 function versionStatusCode(result = {}) {
