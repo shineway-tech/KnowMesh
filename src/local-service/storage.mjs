@@ -578,6 +578,77 @@ const catalogMigrations = [
           ON object_relations(document_id, relation_type, quality_state);
       `);
     }
+  },
+  {
+    id: "005_catalog_chunk_search",
+    version: 5,
+    up(db) {
+      db.exec(`
+        CREATE INDEX IF NOT EXISTS idx_chunks_document_quality_updated
+          ON chunks(document_id, quality_state, updated_at DESC);
+        CREATE INDEX IF NOT EXISTS idx_chunks_structure_quality
+          ON chunks(structure_node_id, quality_state);
+        CREATE INDEX IF NOT EXISTS idx_citations_document_page_search
+          ON citations(document_id, page_number);
+        CREATE INDEX IF NOT EXISTS idx_index_records_provider_index_status
+          ON index_records(provider, index_name, status);
+
+        CREATE VIRTUAL TABLE IF NOT EXISTS chunks_fts USING fts5(
+          chunk_id UNINDEXED,
+          document_id UNINDEXED,
+          structure_node_id UNINDEXED,
+          title,
+          text,
+          metadata
+        );
+
+        INSERT INTO chunks_fts(rowid, chunk_id, document_id, structure_node_id, title, text, metadata)
+          SELECT
+            c.rowid,
+            c.chunk_id,
+            c.document_id,
+            c.structure_node_id,
+            COALESCE(json_extract(c.metadata_json, '$.title'), json_extract(c.metadata_json, '$.metadata.title'), ''),
+            substr(COALESCE(json_extract(c.metadata_json, '$.text'), json_extract(c.metadata_json, '$.textPreview'), c.metadata_json), 1, 4000),
+            substr(c.metadata_json, 1, 4000)
+          FROM chunks c
+          WHERE NOT EXISTS (SELECT 1 FROM chunks_fts WHERE rowid = c.rowid);
+
+        CREATE TRIGGER IF NOT EXISTS chunks_fts_ai
+        AFTER INSERT ON chunks BEGIN
+          INSERT INTO chunks_fts(rowid, chunk_id, document_id, structure_node_id, title, text, metadata)
+          VALUES (
+            new.rowid,
+            new.chunk_id,
+            new.document_id,
+            new.structure_node_id,
+            COALESCE(json_extract(new.metadata_json, '$.title'), json_extract(new.metadata_json, '$.metadata.title'), ''),
+            substr(COALESCE(json_extract(new.metadata_json, '$.text'), json_extract(new.metadata_json, '$.textPreview'), new.metadata_json), 1, 4000),
+            substr(new.metadata_json, 1, 4000)
+          );
+        END;
+
+        CREATE TRIGGER IF NOT EXISTS chunks_fts_ad
+        AFTER DELETE ON chunks BEGIN
+          DELETE FROM chunks_fts WHERE rowid = old.rowid;
+        END;
+
+        CREATE TRIGGER IF NOT EXISTS chunks_fts_au
+        AFTER UPDATE ON chunks BEGIN
+          DELETE FROM chunks_fts WHERE rowid = old.rowid;
+          INSERT INTO chunks_fts(rowid, chunk_id, document_id, structure_node_id, title, text, metadata)
+          VALUES (
+            new.rowid,
+            new.chunk_id,
+            new.document_id,
+            new.structure_node_id,
+            COALESCE(json_extract(new.metadata_json, '$.title'), json_extract(new.metadata_json, '$.metadata.title'), ''),
+            substr(COALESCE(json_extract(new.metadata_json, '$.text'), json_extract(new.metadata_json, '$.textPreview'), new.metadata_json), 1, 4000),
+            substr(new.metadata_json, 1, 4000)
+          );
+        END;
+      `);
+    }
   }
 ];
 

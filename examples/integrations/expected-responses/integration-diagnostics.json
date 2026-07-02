@@ -1,0 +1,34 @@
+{
+  "contractVersion": "2026-07-query-runtime.1",
+  "kind": "knowmesh.integrationDiagnostics",
+  "ok": true,
+  "knowledgeBase": {
+    "id": "sample-general-docs",
+    "scoped": true,
+    "selected": true
+  },
+  "readiness": {
+    "api": "ready",
+    "knowledgeBase": "ready",
+    "queryRuntime": {
+      "status": "ready",
+      "answerPolicy": "citation_ready_evidence_only"
+    },
+    "provider": {
+      "status": "attention",
+      "adapterManifests": 11,
+      "externalCallsBeforeExecution": 0
+    }
+  },
+  "retrySemantics": {
+    "retryable": ["timeout", "network_error", "http_408", "http_429", "http_5xx", "provider_unavailable"],
+    "nonRetryable": ["invalid_request", "out_of_scope", "insufficient_evidence", "knowledge_base_required"]
+  },
+  "cors": {
+    "defaultBindHost": "127.0.0.1",
+    "defaultRemoteAccess": false
+  },
+  "privacy": {
+    "redacted": true
+  }
+}

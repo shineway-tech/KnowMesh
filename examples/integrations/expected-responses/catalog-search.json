@@ -1,0 +1,16 @@
+{
+  "contractVersion": "2026-07-query-runtime.1",
+  "kind": "knowmesh.catalogSearch",
+  "ok": true,
+  "total": 1,
+  "items": [
+    {
+      "documentId": "doc-public-operations",
+      "title": "Public Sample Operations Handbook",
+      "qualityState": "primary",
+      "citations": [
+        { "id": "ver-public-operations:citation:0001", "pageNumber": 1 }
+      ]
+    }
+  ]
+}

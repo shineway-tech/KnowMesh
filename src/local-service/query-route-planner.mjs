@@ -1,22 +1,26 @@
-import { describeK12Scope, extractK12QueryConstraints } from "../core/k12-metadata.mjs";
 import { currentKnowledgeBaseId, listKnowledgeBases } from "./knowledge-bases.mjs";
-import { classifyK12QueryIntent } from "./k12-query-router.mjs";
+import { expertRouteRulesForKnowledgeBase } from "./expert-runtime.mjs";
+import { buildQueryRouteContract } from "./query-route-contract.mjs";
+import { normalizeQueryRequest, understandQuery } from "./query-understanding.mjs";
 
 export function planQueryRoute(state, input = {}) {
-  const question = String(input.question || input.query || "").trim();
+  const request = normalizeQueryRequest(input);
+  const question = request.question;
   const registry = listKnowledgeBases(state);
   const knowledgeBaseId = String(input.knowledgeBaseId || currentKnowledgeBaseId(state) || "").trim();
   const knowledgeBase = registry.items.find((item) => item.id === knowledgeBaseId) || registry.current || null;
   const template = String(input.template || knowledgeBase?.template || "general-docs");
-  if (!question) return emptyPlan(knowledgeBase, "invalid_request");
-  return template === "textbook-cn-k12"
-    ? k12RoutePlan({ question, knowledgeBase })
-    : generalRoutePlan({ question, knowledgeBase });
+  const expertRuntime = expertRouteRulesForKnowledgeBase(state, knowledgeBase || { template });
+  if (!question) return emptyPlan(knowledgeBase, "invalid_request", expertRuntime);
+  const understanding = understandQuery(request, { template });
+  if (understanding.status === "out_of_scope") return refusalPlan({ knowledgeBase, understanding, expertRuntime });
+  return understanding.domain === "k12"
+    ? k12RoutePlan({ understanding, knowledgeBase, expertRuntime })
+    : generalRoutePlan({ understanding, knowledgeBase, expertRuntime });
 }
 
-function k12RoutePlan({ question, knowledgeBase }) {
-  const constraints = extractK12QueryConstraints(question);
-  const intent = classifyK12QueryIntent(question, constraints);
+function k12RoutePlan({ understanding, knowledgeBase, expertRuntime }) {
+  const intent = understanding.intent;
   const structureIntent = new Set([
     "first_lesson_lookup",
     "toc_lookup",
@@ -25,19 +29,15 @@ function k12RoutePlan({ question, knowledgeBase }) {
     "vocabulary_lookup",
     "exercise_example_lookup"
   ]).has(intent);
-  return {
+  return attachRouteContract({
     ok: true,
     kind: "knowmesh.queryRoutePlan",
     apiVersion: "v1",
     domain: "k12",
     intent,
+    understanding,
     knowledgeBase: publicKnowledgeBase(knowledgeBase),
-    scope: {
-      kind: "k12",
-      summary: describeK12Scope(constraints),
-      filter: constraints.compact || {},
-      missing: constraints.missing || {}
-    },
+    scope: understanding.scope,
     route: {
       key: structureIntent ? "k12Catalog" : "hybridRetrieval",
       label: structureIntent
@@ -49,31 +49,29 @@ function k12RoutePlan({ question, knowledgeBase }) {
         : ["structure_nodes", "knowledge_objects", "chunks", "index_records", "aliyun_vector"],
       fallback: structureIntent ? "none_for_structure_questions" : "no_answer_without_sources"
     },
+    expert: expertRuntime.expert,
     qualityGates: standardQualityGates({ scopeRequired: true }),
     diagnostics: {
       planner: "query-route-planner",
       version: "v1",
+      expertRuntime: expertRuntime.diagnostics,
       providerInternalsExposed: false
     }
-  };
+  });
 }
 
-function generalRoutePlan({ question, knowledgeBase }) {
-  const intent = classifyGeneralIntent(question);
-  const structureIntent = intent === "structure_lookup";
-  return {
+function generalRoutePlan({ understanding, knowledgeBase, expertRuntime }) {
+  const intent = understanding.intent;
+  const structureIntent = understanding.routeHint === "structureCatalog";
+  return attachRouteContract({
     ok: true,
     kind: "knowmesh.queryRoutePlan",
     apiVersion: "v1",
     domain: "general",
     intent,
+    understanding,
     knowledgeBase: publicKnowledgeBase(knowledgeBase),
-    scope: {
-      kind: "general",
-      summary: { zh: "按当前知识库检索", en: "Search within the current knowledge base" },
-      filter: {},
-      missing: {}
-    },
+    scope: understanding.scope,
     route: {
       key: structureIntent ? "structureCatalog" : "hybridRetrieval",
       label: structureIntent
@@ -85,19 +83,15 @@ function generalRoutePlan({ question, knowledgeBase }) {
         : ["structure_nodes", "chunks", "index_records", "aliyun_vector"],
       fallback: structureIntent ? "hybridRetrieval" : "no_answer_without_sources"
     },
+    expert: expertRuntime.expert,
     qualityGates: standardQualityGates({ scopeRequired: false }),
     diagnostics: {
       planner: "query-route-planner",
       version: "v1",
+      expertRuntime: expertRuntime.diagnostics,
       providerInternalsExposed: false
     }
-  };
-}
-
-function classifyGeneralIntent(question) {
-  const text = String(question || "");
-  if (/第.+页|page|章节|目录|哪一页/.test(text)) return "structure_lookup";
-  return "general_answer";
+  });
 }
 
 function standardQualityGates({ scopeRequired }) {
@@ -110,6 +104,35 @@ function standardQualityGates({ scopeRequired }) {
     gate("noWeakAnswer", true, "No weak answer counted as success"),
     gate("displaySerialization", true, "Display serialization")
   ];
+}
+
+function refusalPlan({ knowledgeBase, understanding, expertRuntime }) {
+  return attachRouteContract({
+    ok: false,
+    kind: "knowmesh.queryRoutePlan",
+    apiVersion: "v1",
+    status: understanding.status,
+    domain: understanding.domain || "general",
+    intent: understanding.intent,
+    understanding,
+    knowledgeBase: publicKnowledgeBase(knowledgeBase),
+    scope: understanding.scope,
+    route: {
+      key: "reject",
+      label: { zh: "检索前拒答", en: "Pre-retrieval refusal" },
+      priority: [],
+      evidenceSources: [],
+      fallback: "none"
+    },
+    expert: expertRuntime.expert,
+    qualityGates: standardQualityGates({ scopeRequired: true }),
+    diagnostics: {
+      planner: "query-route-planner",
+      version: "v1",
+      expertRuntime: expertRuntime.diagnostics,
+      providerInternalsExposed: false
+    }
+  }, { refusalReason: understanding.status || "out_of_scope" });
 }
 
 function gate(key, required, label) {
@@ -130,8 +153,8 @@ function publicKnowledgeBase(knowledgeBase) {
     : null;
 }
 
-function emptyPlan(knowledgeBase, status) {
-  return {
+function emptyPlan(knowledgeBase, status, expertRuntime = { expert: null, diagnostics: { status: "not_applicable" } }) {
+  return attachRouteContract({
     ok: false,
     kind: "knowmesh.queryRoutePlan",
     apiVersion: "v1",
@@ -141,6 +164,14 @@ function emptyPlan(knowledgeBase, status) {
     knowledgeBase: publicKnowledgeBase(knowledgeBase),
     scope: null,
     route: null,
+    expert: expertRuntime.expert,
     qualityGates: []
+  }, { refusalReason: status });
+}
+
+function attachRouteContract(plan, options = {}) {
+  return {
+    ...plan,
+    contract: buildQueryRouteContract(plan, options)
   };
 }

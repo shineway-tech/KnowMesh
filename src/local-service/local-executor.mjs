@@ -15,7 +15,7 @@ import { buildPipelinePlan, writePipelinePlan } from "../core/plan.mjs";
 import { readRtfText } from "../core/rtf-text.mjs";
 import { isMacroEnabledSourceType, processingGroupForSourceType } from "../core/source-types.mjs";
 import { buildTextRecognitionPlan } from "../core/text-recognition-plan.mjs";
-import { putObject, putVectorIndex, putVectors } from "./aliyun.mjs";
+import { putObject } from "./aliyun.mjs";
 import { ensureDir, writeJsonFile } from "../core/config.mjs";
 import { buildPlanConfig } from "./plan-preview.mjs";
 import { currentKnowledgeBaseId } from "./knowledge-bases.mjs";
@@ -33,6 +33,15 @@ import { syncCleanReviewToQualityIssues, syncQualityLifecycleIssuesToCatalog } f
 import { buildTemplateScan } from "./scan-preview.mjs";
 import { readAliyunCredentials, readAliyunModelProvider, readSetupState } from "./setup-store.mjs";
 import { filterScanForTargetedRerun } from "./targeted-rerun.mjs";
+import { publishBuildVersion, runBuildVersionPublishStage } from "./execution/build-version-publisher.mjs";
+import { writeArtifactCheckpoint } from "./execution/checkpoints.mjs";
+import { runEmbeddingStage } from "./execution/embedding-provider.mjs";
+import { runOcrRecognitionStage } from "./execution/ocr-provider.mjs";
+import { compatibilityConversionFor, sourcePreparationCategory, sourceReviewReason } from "./execution/parser-provider.mjs";
+import { runSourceArchiveStage } from "./execution/source-archive.mjs";
+import { runVectorWriteStage } from "./execution/vector-writer.mjs";
+import { createAliyunModelStudioAdapter } from "./providers/aliyun-model-studio.mjs";
+import { createAliyunOssVectorAdapter } from "./providers/aliyun-oss-vector.mjs";
 
 export async function executeLocalTask(state, job, task, options = {}) {
   const logger = taskLogger(options.log, task);
@@ -41,10 +50,10 @@ export async function executeLocalTask(state, job, task, options = {}) {
   if (task.key === "pages") return writePagePreparation(snapshot, logger);
   if (task.key === "clean") return writeCleanChunks(snapshot, logger);
   if (task.key === "retrieval-policy") return writeRetrievalPolicy(snapshot, logger);
-  if (task.key === "upload") return writeSourceArchive(snapshot, job, logger);
-  if (task.key === "ocr") return writeOcrRecognition(snapshot, job, logger);
-  if (task.key === "embedding") return writeSearchData(snapshot, job, logger);
-  if (task.key === "index") return writeKnowledgeBase(snapshot, job, logger);
+  if (task.key === "upload") return runSourceArchiveStage(snapshot, job, logger, executeSourceArchiveImplementation);
+  if (task.key === "ocr") return runOcrRecognitionStage(snapshot, job, logger, executeOcrRecognitionImplementation);
+  if (task.key === "embedding") return runEmbeddingStage(snapshot, job, logger, executeEmbeddingImplementation);
+  if (task.key === "index") return runVectorWriteStage(snapshot, job, logger, executeVectorWriteImplementation);
   if (task.key === "report") return writeRunReport(job, snapshot, logger);
   throw new Error(`${task.label?.zh || task.key} 当前缺少可执行配置，请先检查本步骤需要的服务或处理方式。`);
 }
@@ -449,7 +458,7 @@ function cloudTaskUnavailableMessage(task) {
   return labels[task.key] || `${task.label?.zh || task.key} 当前缺少可执行配置，请先检查本步骤需要的服务或处理方式。`;
 }
 
-async function writeSourceArchive({ plan, template, state }, job, log) {
+async function executeSourceArchiveImplementation({ plan, template, state }, job, log) {
   const archivePath = path.join(plan.workspace.artifactRoot, "archive", "source-archive.manifest.json");
   const processingPath = path.join(plan.workspace.artifactRoot, "processing", "processing-input.manifest.json");
   const files = sourceArchiveFiles(plan, job);
@@ -536,7 +545,7 @@ async function writeSourceArchive({ plan, template, state }, job, log) {
   };
 }
 
-async function writeOcrRecognition({ plan, template, state }, job, log) {
+async function executeOcrRecognitionImplementation({ plan, template, state }, job, log) {
   const processingPath = path.join(plan.workspace.artifactRoot, "processing", "processing-input.manifest.json");
   const reportPath = path.join(plan.workspace.artifactRoot, "reports", "ocr-recognition.report.json");
   const resultPath = path.join(plan.workspace.artifactRoot, "ocr", "ocr-result.jsonl");
@@ -596,10 +605,12 @@ async function writeOcrRecognition({ plan, template, state }, job, log) {
     writePerDocumentOcrResults(plan.documents, recognized);
     const successCount = normalized.filter((item) => item.status === "recognized").length;
     const failed = normalized.filter((item) => item.status === "failed");
+    const batchCheckpoint = progressDetail({ action: "OCR 批次完成", batch: absoluteBatch, totalBatches, succeeded: successCount, failed: failed.length, completed: recognized.length, total: tasks.length, remaining: Math.max(0, tasks.length - recognized.length), completedItems: recognized.length, failedItems: failed.length, retryItems: 0, next: failed.length ? "先处理失败项。" : "自动进入下一批。" });
+    writeArtifactCheckpoint({ plan, job, stage: "ocr", checkpoint: batchCheckpoint, files: { resultPath, reportPath } });
     log(
       `OCR 批次 ${absoluteBatch}/${totalBatches} 完成：本批 ${successCount}/${normalized.length} 成功，累计 ${recognized.length}/${tasks.length}。`,
       `OCR batch ${absoluteBatch}/${totalBatches} complete: ${successCount}/${normalized.length} succeeded, ${recognized.length}/${tasks.length} total.`,
-      progressDetail({ action: "OCR 批次完成", batch: absoluteBatch, totalBatches, succeeded: successCount, failed: failed.length, completed: recognized.length, total: tasks.length, remaining: Math.max(0, tasks.length - recognized.length), next: failed.length ? "先处理失败项。" : "自动进入下一批。" }),
+      batchCheckpoint,
       failed.length ? "failed" : "completed"
     );
 
@@ -623,6 +634,7 @@ async function writeOcrRecognition({ plan, template, state }, job, log) {
         retryItems: 0,
         next: "恢复任务后会从剩余 OCR 页继续，不会重跑已完成页。"
       });
+      writeArtifactCheckpoint({ plan, job, stage: "ocr", checkpoint, files: { resultPath, reportPath } });
       const report = buildOcrReport({ plan, template, job, tasks, recognized, batchSize, batchCalls: restoredBatchCalls + batchCalls });
       writeJsonFile(reportPath, { ...report, partial: true, checkpoint });
       log(
@@ -1035,52 +1047,8 @@ async function recognizeOcrBatch(state, request) {
 }
 
 async function modelProviderOcrBatch(state, request) {
-  const modelProvider = await readAliyunModelProvider(state);
-  if (!modelProvider?.apiKey || modelProvider.protocol !== "openai-compatible") return null;
-  if (!request.model) throw new Error("还没有选择 OCR 模型，请先回到模型与质量方案确认。");
-
-  const fetchImpl = state.fetchImpl || globalThis.fetch;
-  if (typeof fetchImpl !== "function") throw new Error("当前运行环境没有可用的网络请求能力，不能调用 OCR 模型。");
-
-  const endpoint = joinUrl(modelProvider.baseUrl, "chat/completions");
-  const concurrency = request.batchPolicy?.concurrency ?? ocrConcurrencyFor(state);
-  const retry = retryPolicyFor(state, "ocr");
-  return mapWithConcurrency(request.items, concurrency, async (item) => {
-    try {
-      return await retryExternalCall(async () => {
-        const response = await fetchWithTimeout(fetchImpl, endpoint, {
-          method: "POST",
-          headers: {
-            authorization: `Bearer ${modelProvider.apiKey}`,
-            "content-type": "application/json",
-            accept: "application/json"
-          },
-          body: JSON.stringify(buildOcrChatPayload(request, item))
-        }, state.ocrTimeoutMs || state.cloudTimeoutMs || 120000);
-        const text = await safeResponseText(response);
-        if (!response.ok) throw modelProviderHttpError(response.status, text);
-        const data = parseJsonObject(text);
-        const content = extractOcrResponseText(data);
-        return {
-          taskId: item.taskId,
-          status: content ? "recognized" : "failed",
-          text: content,
-          confidence: null,
-          usage: data.usage || null,
-          providerMessage: content ? "" : "模型服务没有返回 OCR 文本。"
-        };
-      }, retry);
-    } catch (error) {
-      return {
-        taskId: item.taskId,
-        status: "failed",
-        text: "",
-        confidence: null,
-        usage: null,
-        providerMessage: error instanceof Error ? error.message : String(error)
-      };
-    }
-  });
+  const adapter = createAliyunModelStudioAdapter(state, { retry: retryPolicyFor(state, "ocr") });
+  return adapter.recognizeOcrBatch(request);
 }
 
 function buildOcrChatPayload(request, item) {
@@ -1275,7 +1243,7 @@ function appendJsonl(file, records) {
   writeJsonl(file, records, { append: true });
 }
 
-async function writeSearchData({ plan, template, state }, job, log) {
+async function executeEmbeddingImplementation({ plan, template, state }, job, log) {
   const reportPath = path.join(plan.workspace.artifactRoot, "reports", "search-data.report.json");
   const qualityReportPath = path.join(plan.workspace.artifactRoot, "reports", "quality-lifecycle.report.json");
   const reviewQueuePath = path.join(plan.workspace.artifactRoot, "review", "review-queue.jsonl");
@@ -1343,10 +1311,12 @@ async function writeSearchData({ plan, template, state }, job, log) {
     records.push(...normalized);
     const embedded = normalized.filter((item) => item.status === "embedded").length;
     const failed = normalized.filter((item) => item.status === "failed");
+    const batchCheckpoint = progressDetail({ action: "向量化批次完成", batch: absoluteBatch, totalBatches, succeeded: embedded, failed: failed.length, completed: records.length, total: inputs.length, remaining: Math.max(0, inputs.length - records.length), completedItems: records.length, failedItems: failed.length, retryItems: 0, next: failed.length ? "先处理失败项。" : "自动进入下一批。" });
+    writeArtifactCheckpoint({ plan, job, stage: "embedding", checkpoint: batchCheckpoint, files: { recordsPath, reportPath, qualityReportPath, reviewQueuePath, documentInventoryPath } });
     log(
       `向量化批次 ${absoluteBatch}/${totalBatches} 完成：本批 ${embedded}/${normalized.length} 成功，累计 ${records.length}/${inputs.length}。`,
       `Embedding batch ${absoluteBatch}/${totalBatches} complete: ${embedded}/${normalized.length} embedded, ${records.length}/${inputs.length} total.`,
-      progressDetail({ action: "向量化批次完成", batch: absoluteBatch, totalBatches, succeeded: embedded, failed: failed.length, completed: records.length, total: inputs.length, remaining: Math.max(0, inputs.length - records.length), next: failed.length ? "先处理失败项。" : "自动进入下一批。" }),
+      batchCheckpoint,
       failed.length ? "failed" : "completed"
     );
 
@@ -1385,6 +1355,7 @@ async function writeSearchData({ plan, template, state }, job, log) {
         retryItems: 0,
         next: "恢复任务后会从剩余片段继续，不会重跑已完成片段。"
       });
+      writeArtifactCheckpoint({ plan, job, stage: "embedding", checkpoint, files: { recordsPath, reportPath, qualityReportPath, reviewQueuePath, documentInventoryPath } });
       writeJsonl(recordsPath, lifecycle.records);
       syncPendingIndexRecordsToCatalog(state, lifecycle.records, {
         plan,
@@ -1656,55 +1627,17 @@ async function generateEmbeddingBatch(state, request) {
 async function embeddingRuntimeInfo(state) {
   const retry = retryPolicyFor(state, "embedding");
   if (typeof state.embeddingBatchGenerator === "function") return { provider: "custom-batch", retry };
-  const modelProvider = await readAliyunModelProvider(state);
-  if (modelProvider?.provider && modelProvider?.protocol === "openai-compatible") {
-    return { provider: modelProvider.provider, protocol: modelProvider.protocol, retry };
+  const runtime = await createAliyunModelStudioAdapter(state, { retry }).runtimeInfo();
+  if (runtime.provider && runtime.protocol === "openai-compatible") {
+    return { provider: runtime.provider, protocol: runtime.protocol, retry };
   }
   if (typeof state.embeddingGenerator === "function") return { provider: "custom-single", retry };
   return { provider: "", retry };
 }
 
 async function modelProviderEmbeddingBatch(state, request) {
-  const modelProvider = await readAliyunModelProvider(state);
-  if (!modelProvider?.apiKey || modelProvider.protocol !== "openai-compatible") return null;
-
-  const fetchImpl = state.fetchImpl || globalThis.fetch;
-  if (typeof fetchImpl !== "function") throw new Error("当前运行环境没有可用的网络请求能力，不能调用向量化模型。");
-
-  const endpoint = joinUrl(modelProvider.baseUrl, "embeddings");
-  const texts = request.items.map((item) => String(item.text || ""));
-  const payload = {
-    model: request.model,
-    input: texts
-  };
-
-  const data = await retryExternalCall(async () => {
-    const response = await fetchWithTimeout(fetchImpl, endpoint, {
-      method: "POST",
-      headers: {
-        authorization: `Bearer ${modelProvider.apiKey}`,
-        "content-type": "application/json",
-        accept: "application/json"
-      },
-      body: JSON.stringify(payload)
-    }, state.embeddingTimeoutMs || state.cloudTimeoutMs || 60000);
-    const text = await safeResponseText(response);
-    if (!response.ok) throw modelProviderHttpError(response.status, text);
-    return parseJsonObject(text);
-  }, retryPolicyFor(state, "embedding"));
-
-  const rows = Array.isArray(data.data) ? data.data : [];
-  const byIndex = new Map(rows.map((row, index) => [Number.isInteger(row?.index) ? row.index : index, row]));
-  return request.items.map((item, index) => {
-    const row = byIndex.get(index) || rows[index] || {};
-    return {
-      chunkId: item.chunk_id,
-      status: Array.isArray(row.embedding) ? "embedded" : "failed",
-      embedding: Array.isArray(row.embedding) ? row.embedding : null,
-      usage: data.usage || null,
-      providerMessage: Array.isArray(row.embedding) ? "" : "模型服务没有返回对应的向量结果。"
-    };
-  });
+  const adapter = createAliyunModelStudioAdapter(state, { retry: retryPolicyFor(state, "embedding") });
+  return adapter.generateEmbeddingBatch(request);
 }
 
 function normalizeIndexRecord(item, result = {}, model) {
@@ -1787,10 +1720,11 @@ function reviewQueueOutputRecords(records) {
   }));
 }
 
-async function writeKnowledgeBase({ plan, template, state }, job, log) {
+async function executeVectorWriteImplementation({ plan, template, state }, job, log) {
   const pendingPath = path.join(plan.workspace.artifactRoot, "index_records", "index-records.pending.jsonl");
   const resultPath = path.join(plan.workspace.artifactRoot, "index_records", "index-write.result.jsonl");
   const reportPath = path.join(plan.workspace.artifactRoot, "reports", "knowledge-write.report.json");
+  const draftManifestPath = path.join(plan.workspace.manifests, "draft-active-manifest.json");
   const activeManifestPath = path.join(plan.workspace.manifests, "active-manifest.json");
   const allPending = readJsonlFile(pendingPath).filter((item) => item?.status !== "failed" && item?.embedding);
   const writable = allPending.filter((item) => item?.quality?.writeEnabled !== false);
@@ -1875,6 +1809,8 @@ async function writeKnowledgeBase({ plan, template, state }, job, log) {
     results.push(...writtenRows);
     const written = writtenRows.length;
     const failed = normalized.filter((item) => item.status === "failed");
+    const batchCheckpoint = progressDetail({ action: "写入批次完成", batch: absoluteBatch, totalBatches, succeeded: written, failed: failed.length, completed: results.length, total: writable.length, remaining: Math.max(0, writable.length - results.length), completedItems: results.length, failedItems: failed.length, retryItems: 0, target, next: failed.length ? "先处理失败项。" : "自动进入下一批。" });
+    writeArtifactCheckpoint({ plan, job, stage: "index", checkpoint: batchCheckpoint, files: { resultPath, reportPath, activeManifestPath } });
     log(
       failed.length
         ? `写入知识库批次 ${absoluteBatch}/${totalBatches} 未通过：本批 ${written}/${normalized.length} 成功，失败 ${failed.length} 条，累计成功 ${results.length}/${writable.length}。`
@@ -1882,7 +1818,7 @@ async function writeKnowledgeBase({ plan, template, state }, job, log) {
       failed.length
         ? `Knowledge-base write batch ${absoluteBatch}/${totalBatches} failed: ${written}/${normalized.length} written, ${failed.length} failed, ${results.length}/${writable.length} written total.`
         : `Knowledge-base write batch ${absoluteBatch}/${totalBatches} complete: ${written}/${normalized.length} written, ${results.length}/${writable.length} written total.`,
-      progressDetail({ action: "写入批次完成", batch: absoluteBatch, totalBatches, succeeded: written, failed: failed.length, completed: results.length, total: writable.length, remaining: Math.max(0, writable.length - results.length), next: failed.length ? "先处理失败项。" : "自动进入下一批。" }),
+      batchCheckpoint,
       failed.length ? "failed" : "completed"
     );
 
@@ -1910,6 +1846,7 @@ async function writeKnowledgeBase({ plan, template, state }, job, log) {
         target,
         next: "恢复任务后会从剩余记录继续，不会重复写入已完成记录。"
       });
+      writeArtifactCheckpoint({ plan, job, stage: "index", checkpoint, files: { resultPath, reportPath, activeManifestPath } });
       syncIndexWriteResultsToCatalog(state, results, {
         plan,
         job,
@@ -1954,7 +1891,12 @@ async function writeKnowledgeBase({ plan, template, state }, job, log) {
     totalBatches: restoredBatchCalls + batchCalls,
     batchSize
   });
-  writeJsonFile(activeManifestPath, activeManifest);
+  await runBuildVersionPublishStage({
+    draftManifestPath,
+    activeManifestPath,
+    manifest: activeManifest,
+    qualityGates: { requireActiveRecords: true, allowReviewRecords: true }
+  }, job, log, executeBuildVersionPublishImplementation);
   writeJsonFile(reportPath, report);
 
   log(`知识库写入完成：${finalResults.filter((item) => item.status === "written").length}/${finalResults.length} 条记录已激活，调用 ${restoredBatchCalls + batchCalls} 个批次。`, `Knowledge-base write complete: ${finalResults.filter((item) => item.status === "written").length}/${finalResults.length} record(s) activated across ${restoredBatchCalls + batchCalls} batch(es).`, progressDetail({ action: "知识库写入完成", succeeded: finalResults.filter((item) => item.status === "written").length, total: finalResults.length, batchCalls: restoredBatchCalls + batchCalls, target, next: "生成执行摘要。" }), "completed");
@@ -1966,9 +1908,21 @@ async function writeKnowledgeBase({ plan, template, state }, job, log) {
       ...(sidecar?.artifacts || []),
       artifact("knowledgeWriteReport", "知识库写入报告", "Knowledge write report", reportPath, "记录批量写入结果、知识库位置、失败项和回滚依据。", "Records batch write result, knowledge-base target, failures, and rollback basis."),
       artifact("indexWriteResult", "写入结果", "Index write result", resultPath, "保存每条检索记录的写入状态和远端 ID。", "Stores each search record write status and remote ID."),
+      artifact("draftActiveManifest", "待发布版本清单", "Draft active manifest", draftManifestPath, "记录发布前通过质量门检查的版本草稿。", "Records the version draft checked before activation."),
       artifact("activeManifest", "已激活版本清单", "Active manifest", activeManifestPath, "记录当前已生效的资料版本和写入位置。", "Records active source versions and write target.")
     ]
   };
+}
+
+async function executeBuildVersionPublishImplementation(context, job, log) {
+  const result = publishBuildVersion(context);
+  log?.(
+    "版本清单已通过质量门并激活。",
+    "Version manifest passed quality gates and was activated.",
+    { draftManifestPath: result.draftManifestPath, activeManifestPath: result.activeManifestPath, datasetVersionId: job.datasetVersionId || "" },
+    "completed"
+  );
+  return result;
 }
 
 function shouldPublishAliyunSidecar(state, target) {
@@ -2028,59 +1982,8 @@ async function writeVectorBatch(state, request) {
 }
 
 async function aliyunVectorBatchWrite(state, request, retry) {
-  if (request.target?.provider !== "aliyun-vector") return null;
-  const credentials = await readAliyunCredentials(state);
-  if (!credentials?.accessKeyId || !credentials?.accessKeySecret) throw new Error("没有找到本机阿里云凭证，不能写入 OSS 向量 Bucket。");
-
-  const dimension = request.items.find((item) => Array.isArray(item.embedding))?.embedding?.length || 0;
-  if (!dimension) throw new Error("没有找到可写入的向量数据。");
-
-  const common = {
-    bucket: request.target.bucket,
-    region: request.target.region,
-    indexName: request.target.index,
-    accountId: state.__aliyunVectorAccountId || state.aliyunAccountId || request.target.accountId || "",
-    fetchImpl: state.fetchImpl,
-    timeoutMs: state.indexTimeoutMs || state.cloudTimeoutMs || 60000
-  };
-
-  if (request.batchPolicy?.ensureIndex !== false) {
-    const indexReady = await retryExternalCall(async () => retryableCloudResult(await putVectorIndex(credentials, {
-      ...common,
-      dimension,
-      distanceMetric: request.job?.draft?.["aliyun.search.distanceMetric"] || "cosine"
-    })), retry);
-    if (indexReady?.accountId) {
-      state.__aliyunVectorAccountId = indexReady.accountId;
-      common.accountId = indexReady.accountId;
-    }
-  }
-
-  const written = await retryExternalCall(async () => retryableCloudResult(await putVectors(credentials, {
-    ...common,
-    items: request.items.map((item) => ({
-      key: item.chunk_id,
-      embedding: item.embedding,
-      metadata: vectorMetadataForItem(item)
-    }))
-  })), retry);
-
-  if (written?.accountId) state.__aliyunVectorAccountId = written.accountId;
-
-  if (!written.ok) {
-    return request.items.map((item) => ({
-      chunkId: item.chunk_id,
-      status: "failed",
-      providerMessage: written.error?.message || "OSS Vector 写入失败。"
-    }));
-  }
-
-  return request.items.map((item) => ({
-    chunkId: item.chunk_id,
-    status: "written",
-    remoteId: `ossvector://${request.target.bucket}/${request.target.index}/${item.chunk_id}`,
-    requestId: written.requestId || ""
-  }));
+  const adapter = createAliyunOssVectorAdapter(state, { retry, metadataForItem: vectorMetadataForItem });
+  return adapter.writeBatch(request);
 }
 
 function vectorMetadataForItem(item) {
@@ -3125,7 +3028,7 @@ function buildFilterPreview(clean) {
   };
 }
 
-function writeRunReport(job, { plan }, log) {
+async function writeRunReport(job, { plan, state }, log) {
   const reportPath = path.join(plan.workspace.artifactRoot, "reports", "local-run.report.json");
   log(`正在生成任务报告：汇总 ${job.artifacts?.length || 0} 个本地产物。`, `Generating run report with ${job.artifacts?.length || 0} local artifact(s).`, { artifacts: job.artifacts?.length || 0 });
   writeJsonFile(reportPath, {
@@ -3143,11 +3046,81 @@ function writeRunReport(job, { plan }, log) {
     artifacts: job.artifacts || [],
     gates: plan.gates
   });
+  const artifacts = [
+    artifact("localRunReport", "知识库任务报告", "Local run report", reportPath, "汇总本次执行结果和可追溯产物。", "Summarizes this run and its traceable artifacts.")
+  ];
+  const localVersionArtifacts = await publishLocalCatalogVersionIfNeeded({ state, job, plan, log });
+  artifacts.push(...localVersionArtifacts);
   log(`任务报告已生成：${reportPath}`, `Run report generated: ${reportPath}`, { reportPath }, "completed");
   return {
-    artifacts: [
-      artifact("localRunReport", "知识库任务报告", "Local run report", reportPath, "汇总本次执行结果和可追溯产物。", "Summarizes this run and its traceable artifacts.")
-    ]
+    artifacts
+  };
+}
+
+async function publishLocalCatalogVersionIfNeeded({ state, job, plan, log }) {
+  if (job.mode !== "local") return [];
+  if (artifactPathForJob(job, "activeManifest")) return [];
+  const chunks = readCatalogChunks(state, { includeInactive: true });
+  const publishableChunks = chunks.filter((item) => item?.quality?.writeEnabled !== false);
+  if (!publishableChunks.length) {
+    log?.(
+      "本地 catalog 暂无可发布片段，版本发布保持草稿状态。",
+      "The local catalog has no publishable chunks; version publish remains draft.",
+      { chunks: 0 },
+      "warn"
+    );
+    return [];
+  }
+
+  const draftManifestPath = path.join(plan.workspace.manifests, "draft-active-manifest.json");
+  const activeManifestPath = path.join(plan.workspace.manifests, "active-manifest.json");
+  const activeManifest = buildLocalCatalogActiveManifest(plan, job, publishableChunks);
+  await runBuildVersionPublishStage({
+    draftManifestPath,
+    activeManifestPath,
+    manifest: activeManifest,
+    qualityGates: { requireActiveRecords: true, allowReviewRecords: true }
+  }, job, log, executeBuildVersionPublishImplementation);
+  return [
+    artifact("draftActiveManifest", "待发布版本清单", "Draft active manifest", draftManifestPath, "记录本地 catalog 发布前通过质量门检查的版本草稿。", "Records the local catalog version draft checked before activation."),
+    artifact("activeManifest", "已激活版本清单", "Active manifest", activeManifestPath, "记录当前已生效的本地 catalog 版本。", "Records the active local catalog version.")
+  ];
+}
+
+function buildLocalCatalogActiveManifest(plan, job, chunks = []) {
+  const reviewRecords = chunks.filter((item) => item?.quality?.tier === "review").length;
+  const activeRecords = chunks.length - reviewRecords;
+  return {
+    ...plan.proposedActiveManifest,
+    generatedAt: new Date().toISOString(),
+    status: "active",
+    activatedAt: new Date().toISOString(),
+    datasetVersionId: job.datasetVersionId || "",
+    knowledgeBase: { id: job.knowledgeBaseId || job.knowledgeBase?.id || "" },
+    job: { id: job.id, mode: job.mode, template: job.template },
+    target: {
+      provider: "local",
+      store: "catalog.sqlite"
+    },
+    sidecar: {
+      status: "ready",
+      authoritativeStore: "catalog.sqlite",
+      chunks: activeRecords
+    },
+    quality: {
+      activeRecords,
+      primaryRecords: activeRecords,
+      reviewRecords,
+      totalRecords: chunks.length
+    },
+    activeVersions: plan.proposedActiveManifest.activeVersions.map((item) => ({
+      ...item,
+      lifecycle: "active"
+    })),
+    rollback: {
+      enabled: true,
+      reason: "local-catalog-publish"
+    }
   };
 }
 
@@ -3171,27 +3144,6 @@ async function readLocalText(document, context = {}) {
   return text;
 }
 
-function sourcePreparationCategory(document) {
-  if (["text", "markdown", "csv", "tsv", "rtf"].includes(document.sourceType)) return "directText";
-  if (["docx", "docm", "xlsx", "xlsm", "pptx", "pptm"].includes(document.sourceType)) return "office";
-  if (processingGroupForSourceType(document.sourceType) === "autoConvert") return "autoConvert";
-  if (document.sourceType === "image" || document.sourceType.includes("pdf")) return "ocr";
-  return "unsupported";
-}
-
-function sourceReviewReason(document, conversion) {
-  const category = sourcePreparationCategory(document);
-  if (category === "office") return "本机未能读取这个 Office 文件，需要确认文件未损坏或先转换为可读取格式。";
-  if (category === "autoConvert") {
-    if (conversion?.status === "converter_missing") return "本机没有找到可用的兼容转换器，需要先安装 LibreOffice 或可用转换工具。";
-    if (conversion?.status === "conversion_failed") return "兼容转换没有成功，需要查看转换报告后重试或先手动另存为新版 Office 格式。";
-    if (conversion?.status === "converted") return "兼容转换已完成，但转换后的文件没有读出正文，需要检查文件内容。";
-    return "需要先完成兼容转换，再按转换后的内容生成正文分段。";
-  }
-  if (category === "ocr") return "需要先完成页面整理或文字识别，再生成正文分段。";
-  return "当前文件类型暂未生成正文分段。";
-}
-
 function summarizeConversions(records) {
   return {
     totalDocuments: records.length,
@@ -3199,46 +3151,6 @@ function summarizeConversions(records) {
     missingConverters: records.filter((item) => item.status === "converter_missing").length,
     failedDocuments: records.filter((item) => item.status === "conversion_failed").length
   };
-}
-
-function compatibilityConversionFor(sourceType) {
-  const officeTypes = new Set(["doc", "xls", "ppt"]);
-  const wpsTypes = new Set(["wps", "et", "dps"]);
-  return {
-    required: true,
-    sourceType,
-    outputPreference: officeTypes.has(sourceType)
-      ? modernOfficeTarget(sourceType)
-      : wpsTypes.has(sourceType)
-        ? modernWpsTarget(sourceType)
-        : "readable-document",
-    candidateTools: [
-      {
-        name: "LibreOffice",
-        commands: ["soffice", "libreoffice"],
-        suitableFor: officeTypes.has(sourceType) ? [sourceType] : []
-      },
-      {
-        name: "WPS Office",
-        commands: ["wps", "wpp", "et"],
-        suitableFor: wpsTypes.has(sourceType) ? [sourceType] : []
-      }
-    ].filter((tool) => tool.suitableFor.length > 0)
-  };
-}
-
-function modernOfficeTarget(sourceType) {
-  if (sourceType === "doc") return "docx";
-  if (sourceType === "xls") return "xlsx";
-  if (sourceType === "ppt") return "pptx";
-  return "docx";
-}
-
-function modernWpsTarget(sourceType) {
-  if (sourceType === "wps") return "docx";
-  if (sourceType === "et") return "xlsx";
-  if (sourceType === "dps") return "pptx";
-  return "docx";
 }
 
 function delimitedTextToReadable(text, delimiter, document) {

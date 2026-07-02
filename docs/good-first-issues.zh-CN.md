@@ -13,6 +13,9 @@ KnowMesh 的 starter task 应该小、清楚、可验证，并且不会要求贡
 | `area:tests` | 为已有 API、迁移、任务恢复或启动器补测试 | 相关 `node --test ...` 或 `npm test` |
 | `area:web-console` | 文案、空状态、按钮标签、无密钥 demo 可理解性 | 本地页面可读，API 行为不变 |
 | `area:provider` | provider 能力说明、错误提示、无密钥能力矩阵 | 不引入真实密钥，不调用云 |
+| `area:expert` | Expert manifest、schema、作者文档和小型合成 fixture | 不扩大 Core 行业逻辑，先补 manifest 测试 |
+| `area:integration` | HTTP 示例、OpenAPI 文档、Query Runtime SDK 示例 | 不读取内部 SQLite，只走公开 API |
+| `sample request` | 请求新的公开样例或合成场景 | 不要提交私有资料，说明公开边界 |
 | `area:expert-k12` | K12 结构说明、评测样例格式、query router 文档 | 不加入教材正文，不扩大 Core 行业逻辑 |
 
 ## Starter Issue 模板
@@ -24,6 +27,12 @@ KnowMesh 的 starter task 应该小、清楚、可验证，并且不会要求贡
 - 非范围：明确不需要接入云、不需要真实教材、不需要改设计权威。
 - 验收：列出命令，例如 `npm run verify:package-boundary` 或指定 `node --test`。
 - 安全：提醒不要提交 `.env`、SQLite、workspace、私有文档、日志或本地路径。
+
+## First Contributor Path
+
+- docs-only：修改 README、docs、examples 或公开样例说明，保持中英文同步，验收 `git diff --check` 和相关文档测试。
+- code-path：只使用 public API、公开样例和小范围测试，不读取内部 SQLite，不引入 JSON-first 运行时状态。
+- public API：集成或示例应走 Query Runtime / Integration endpoints / SDK，不把 `workspace.sqlite` 或 `catalog.sqlite` 当作外部 API。
 
 ## 首批建议任务
 
@@ -89,6 +98,21 @@ Acceptance:
 
 - The targeted `node --test ...` command passes.
 - `npm test` passes if the change touches shared behavior.
+
+### 5. Add an integration example note
+
+Labels: `good first issue`, `area:integration`, `help wanted`
+
+Scope:
+
+- Improve `examples/integrations/` wording or expected responses.
+- Keep the examples API-first.
+- Do not read internal SQLite or introduce private data.
+
+Acceptance:
+
+- `npm test -- scripts/integration-examples.test.mjs`
+- `git diff --check`
 
 ## 不适合第一次贡献的任务
 

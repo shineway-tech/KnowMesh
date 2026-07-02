@@ -125,19 +125,19 @@ function queryIssueType(status, failedGates = []) {
   const failed = new Set(failedGates.map((item) => item.key));
   if (failed.has("displaySerialization")) return "display_serialization";
   if (failed.has("noWeakAnswer")) return "weak_answer";
-  if (status === "no_evidence" || status === "no_answer" || failed.has("evidenceFound")) return "no_evidence";
-  if (status === "model_unavailable") return "model_unavailable";
+  if (status === "insufficient_evidence" || status === "no_evidence" || status === "no_answer" || failed.has("evidenceFound")) return "insufficient_evidence";
+  if (status === "provider_unavailable" || status === "model_unavailable") return "provider_unavailable";
   if (status === "model_failed") return "model_failed";
   return failedGates.length ? "quality_gate_failed" : "";
 }
 
 function issueReason(issueType) {
   const reasons = {
-    no_evidence: {
+    insufficient_evidence: {
       zh: "查询没有找到可引用证据。",
       en: "The query found no citable evidence."
     },
-    model_unavailable: {
+    provider_unavailable: {
       zh: "查询已有证据但缺少可用模型服务。",
       en: "The query has evidence but no usable model service."
     },

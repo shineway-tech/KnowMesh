@@ -52,6 +52,41 @@ function readCatalogRows(userDataRoot, knowledgeBaseId, sql, params = []) {
   }
 }
 
+test("OpenAPI document covers integration endpoints implemented by the local service", () => {
+  const specPath = path.join(projectRoot, "docs", "api", "openapi.json");
+  const spec = JSON.parse(fs.readFileSync(specPath, "utf8"));
+  const serverSource = fs.readFileSync(path.join(projectRoot, "src", "local-service", "server.mjs"), "utf8");
+  const expected = [
+    ["post", "/kb/{knowledgeBaseId}/api/query", "/api/query"],
+    ["get", "/kb/{knowledgeBaseId}/api/query/contract", "/api/query/contract"],
+    ["post", "/kb/{knowledgeBaseId}/api/query/plan", "/api/query/plan"],
+    ["post", "/kb/{knowledgeBaseId}/api/query/feedback", "/api/query/feedback"],
+    ["get", "/kb/{knowledgeBaseId}/api/query/feedback/summary", "/api/query/feedback/summary"],
+    ["post", "/kb/{knowledgeBaseId}/api/query/feedback/resolve", "/api/query/feedback/resolve"],
+    ["get", "/kb/{knowledgeBaseId}/api/search", "/api/search"],
+    ["post", "/kb/{knowledgeBaseId}/api/search", "/api/search"],
+    ["get", "/kb/{knowledgeBaseId}/api/maintenance/status", "/api/maintenance/status"],
+    ["get", "/kb/{knowledgeBaseId}/api/maintenance/export", "/api/maintenance/export"],
+    ["get", "/kb/{knowledgeBaseId}/api/package/export/preview", "/api/package/export/preview"],
+    ["post", "/kb/{knowledgeBaseId}/api/package/import/preview", "/api/package/import/preview"],
+    ["get", "/kb/{knowledgeBaseId}/api/version/manifest", "/api/version/manifest"],
+    ["get", "/kb/{knowledgeBaseId}/api/versions", "/api/versions"],
+    ["get", "/kb/{knowledgeBaseId}/api/versions/diff", "/api/versions/diff"],
+    ["post", "/kb/{knowledgeBaseId}/api/versions/rollback/preview", "/api/versions/rollback/preview"],
+    ["post", "/kb/{knowledgeBaseId}/api/versions/rollback", "/api/versions/rollback"]
+  ];
+
+  assert.equal(spec.openapi, "3.1.0");
+  assert.equal(spec.info?.title, "KnowMesh Local Service API");
+  assert.ok(spec.components?.parameters?.KnowledgeBaseId);
+  for (const [method, documentedPath, serverPath] of expected) {
+    assert.ok(spec.paths?.[documentedPath]?.[method], `${method.toUpperCase()} ${documentedPath} should be documented`);
+    assert.match(serverSource, new RegExp(`pathname === "${serverPath.replaceAll("/", "\\/")}"`), `${serverPath} should be implemented`);
+  }
+  assert.match(JSON.stringify(spec), /Query Runtime/);
+  assert.doesNotMatch(JSON.stringify(spec), /vector bucket|OSS Vector query/i);
+});
+
 test("local service exposes platform runtime diagnostics without a selected knowledge base", async () => {
   const userDataRoot = fs.mkdtempSync(path.join(os.tmpdir(), "knowmesh-platform-api-"));
   const service = await startLocalService({ projectRoot, userDataRoot, port: 0, open: false });
@@ -76,7 +111,7 @@ test("local service exposes platform runtime diagnostics without a selected know
     assert.equal(providers.kind, "knowmesh.providerCapabilities");
     assert.ok(providers.providers.some((item) => item.id === "local-catalog" && item.configured));
     assert.ok(providers.costPrivacyCards.some((item) => item.providerId === "aliyun-model-studio"));
-    assert.doesNotMatch(JSON.stringify(providers), /apiKey|secret/i);
+    assert.doesNotMatch(JSON.stringify(providers), /apiKey|accessKeySecret/i);
     assert.equal(maintenanceResponse.status, 200);
     assert.equal(maintenance.maintenance.platformRuntime.kind, "knowmesh.platformRuntimeInventory");
     assert.equal(maintenance.maintenance.providerCapabilities.kind, "knowmesh.providerCapabilities");
@@ -87,7 +122,7 @@ test("local service exposes platform runtime diagnostics without a selected know
     assert.equal(diagnostics.providerCapabilities.kind, "knowmesh.providerCapabilities");
     assert.equal(diagnostics.platformRuntime.workspace.packageName, "knowmesh");
     assert.doesNotMatch(JSON.stringify(diagnostics.platformRuntime), /apiKey|secret|credential/i);
-    assert.doesNotMatch(JSON.stringify(diagnostics.providerCapabilities), /apiKey|secret/i);
+    assert.doesNotMatch(JSON.stringify(diagnostics.providerCapabilities), /apiKey|accessKeySecret/i);
   } finally {
     await service.close();
     fs.rmSync(userDataRoot, { recursive: true, force: true });
@@ -180,9 +215,14 @@ test("maintenance diagnostic export redacts latest job summary text fields", asy
     assert.equal(diagnostics.latestJob.id, "job-sensitive-summary");
     assert.equal(diagnostics.latestJob.summary.includedFiles, 1);
     assert.equal(diagnostics.latestJob.summary.logicalDocuments, 1);
+    assert.equal(diagnostics.latestJob.summary.sourceRoot, undefined);
+    assert.equal(diagnostics.latestJob.summary.workspaceRoot, undefined);
+    assert.equal(diagnostics.latestJob.summary.baseWorkspaceRoot, undefined);
+    assert.equal(diagnostics.latestJob.summary.activeManifestPath, undefined);
     assert.equal(diagnostics.latestJob.summary.question, undefined);
     assert.equal(diagnostics.latestJob.summary.sourceContent, undefined);
     assert.equal(diagnostics.latestJob.summary.answerText, undefined);
+    assert.doesNotMatch(serialized, new RegExp(userDataRoot.replaceAll("\\", "\\\\")));
     assert.doesNotMatch(serialized, /private diagnostic question|private diagnostic source content|private diagnostic answer text|private diagnostic expected answer/);
   } finally {
     await service.close();
@@ -1229,10 +1269,16 @@ test("local service serves web console UI", async () => {
     assert.doesNotMatch(body, /data-welcome-capabilities/);
     assert.doesNotMatch(body, /data-welcome-principles/);
     assert.doesNotMatch(body, /data-welcome-open-source/);
-    assert.match(body, /KnowMesh Core/);
-    assert.match(body, /KnowMesh Expert/);
-    assert.match(body, /Quality Gates/);
-    assert.match(body, /Traceable Knowledge/);
+    assert.match(body, /资料进入/);
+    assert.match(body, /生成知识/);
+    assert.match(body, /质量复核/);
+    assert.match(body, /可追溯回答/);
+    assert.match(body, /版本维护/);
+    assert.match(body, /应用接入/);
+    assert.doesNotMatch(body, />KnowMesh Core</);
+    assert.doesNotMatch(body, />KnowMesh Expert</);
+    assert.doesNotMatch(body, />Quality Gates</);
+    assert.doesNotMatch(body, />Traceable Knowledge</);
     assert.doesNotMatch(body, /教材与培训/);
     assert.doesNotMatch(body, /welcome-example-strip/);
     assert.match(body, /MIT/);
@@ -3904,7 +3950,7 @@ test("query runtime uses completed index records when local chunks are empty", a
   }
 });
 
-test("query runtime prefers catalog chunks when index jsonl artifacts are absent", async () => {
+test("query runtime prefers catalog search when index jsonl artifacts are absent", async () => {
   const userDataRoot = fs.mkdtempSync(path.join(os.tmpdir(), "knowmesh-query-catalog-index-test-"));
   const fetchImpl = async (url) => {
     const target = String(url);
@@ -3998,7 +4044,9 @@ test("query runtime prefers catalog chunks when index jsonl artifacts are absent
 
     assert.equal(response.status, 200);
     assert.equal(body.ok, true);
-    assert.equal(body.runtime.source.kind, "catalogChunks");
+    assert.equal(body.runtime.source.kind, "catalogSearch");
+    assert.equal(body.query.retrieval.source, "catalogSearch");
+    assert.equal(body.query.retrieval.catalogMatches, 1);
     assert.equal(body.status, "answered");
     assert.equal(body.citations[0].pageNumber, 29);
     assert.match(body.answer.text, /小数除法/);
@@ -4069,10 +4117,12 @@ test("query runtime uses structure catalog for general page lookups before hybri
   }
 });
 
-test("query runtime uses catalog chunks when index artifacts are absent", async () => {
+test("query runtime uses catalog search when index artifacts are absent", async () => {
   const userDataRoot = fs.mkdtempSync(path.join(os.tmpdir(), "knowmesh-query-catalog-chunks-test-"));
+  const requests = [];
   const fetchImpl = async (url) => {
     const target = String(url);
+    requests.push(target);
     if (target.includes("/compatible-mode/v1/chat/completions")) {
       return {
         ok: true,
@@ -4146,6 +4196,11 @@ test("query runtime uses catalog chunks when index artifacts are absent", async 
       })
     });
 
+    const providersResponse = await fetch(`${service.url}/api/providers/capabilities`);
+    const providers = await providersResponse.json();
+    assert.equal(providers.providers.find((item) => item.id === "local-vector")?.status, "disabled");
+    assert.ok(providers.capabilities.some((item) => item.key === "localVectorSearch" && item.status === "disabled"));
+
     const response = await fetch(`${service.url}/kb/${knowledgeBase.id}/api/query`, {
       method: "POST",
       headers: { "content-type": "application/json" },
@@ -4157,8 +4212,12 @@ test("query runtime uses catalog chunks when index artifacts are absent", async 
 
     assert.equal(response.status, 200);
     assert.equal(body.ok, true);
-    assert.equal(body.runtime.source.kind, "catalogChunks");
+    assert.equal(body.runtime.source.kind, "catalogSearch");
+    assert.equal(body.query.retrieval.source, "catalogSearch");
+    assert.equal(body.query.retrieval.catalogMatches, 1);
     assert.equal(body.status, "answered");
+    assert.equal(requests.some((item) => item.includes("/embeddings")), false);
+    assert.equal(requests.some((item) => item.includes("?queryVectors")), false);
     assert.match(body.citations[0].excerpt, /小数除法/);
     assert.match(body.answer.text, /小数除法/);
   } finally {
@@ -4537,12 +4596,12 @@ test("query runtime explains no evidence without pretending the model answered",
 
     assert.equal(response.status, 200);
     assert.equal(body.ok, false);
-    assert.equal(body.status, "no_evidence");
+    assert.equal(body.status, "insufficient_evidence");
     assert.equal(body.runtime.source.kind, "aliyunVector");
     assert.equal(body.query.retrieval.cloudMatches, 0);
     assert.equal(body.query.retrieval.acceptedCitations, 0);
     assert.equal(body.citations.length, 0);
-    assert.equal(body.answer.status, "no_evidence");
+    assert.equal(body.answer.status, "insufficient_evidence");
     assert.equal(body.answer.text, "");
     assert.match(body.answer.message.zh, /不会编造答案/);
     assert.ok(body.checks.some((item) => item.key === "sources" && item.status === "fail"));
@@ -4578,7 +4637,7 @@ test("query runtime explains no evidence without pretending the model answered",
     assert.equal(issueRows[0].status, "open");
     assert.equal(issueRows[0].reason, "查询没有找到可引用证据。");
     assert.equal(details.stage, "query-runtime");
-    assert.equal(details.issueType, "no_evidence");
+    assert.equal(details.issueType, "insufficient_evidence");
     assert.equal(details.questionPreview, "六年级上册数学第三单元讲的什么");
     assert.equal(details.occurrences, 2);
     assert.ok(details.quality.failedGates.some((item) => item.key === "evidenceFound"));
@@ -5490,7 +5549,7 @@ test("query runtime refuses out-of-scope K12 questions before retrieval", async 
     assert.equal(body.query.retrieval.source, "k12Catalog");
     assert.equal(body.query.retrieval.scanned, 0);
     assert.deepEqual(body.citations, []);
-    assert.equal(body.maintenance, undefined);
+    assert.equal(body.maintenance, null);
     assert.equal(readCatalogScalar(userDataRoot, knowledgeBase.id, "select count(*) from quality_issues where target_type = 'query'"), 0);
     assert.equal(requests.find((item) => item.url.includes("?queryVectors")), undefined);
     assert.equal(requests.find((item) => item.url.includes("/chat/completions")), undefined);

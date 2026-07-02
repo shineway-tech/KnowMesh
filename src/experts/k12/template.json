@@ -1,0 +1,61 @@
+{
+  "id": "textbook-cn-k12",
+  "expertId": "k12",
+  "manifestVersion": "1.0.0",
+  "name": "KnowMesh Expert · K12",
+  "status": "alpha",
+  "extendsTemplate": "general-docs",
+  "schema": "src/experts/k12/schema.json",
+  "supportedSourceTypes": ["pdf", "office", "wps", "markdown", "text", "image"],
+  "setupFields": [
+    { "key": "metadata.stage", "required": true },
+    { "key": "metadata.subject", "required": true },
+    { "key": "metadata.grade", "required": true },
+    { "key": "metadata.volume", "required": false },
+    { "key": "metadata.publisher", "required": false },
+    { "key": "metadata.edition", "required": false }
+  ],
+  "extraction": {
+    "objects": [
+      "book",
+      "unit",
+      "lesson",
+      "section",
+      "column",
+      "text",
+      "vocabulary",
+      "knowledge_point",
+      "formula",
+      "table",
+      "figure",
+      "example",
+      "exercise",
+      "answer_explanation",
+      "experiment",
+      "activity",
+      "citation_anchor"
+    ],
+    "relations": ["contains", "teaches", "explains", "cites", "appears_on_page", "belongs_to_unit"]
+  },
+  "gates": ["sourceScope", "structureCompleteness", "citationCoverage", "outOfScopeRefusal", "displaySerialization"],
+  "queryRoutes": ["structureLookup", "domainObjectLookup", "hybridCitation", "outOfScopeRefusal"],
+  "capabilities": [
+    "schema",
+    "sourceScopeGate",
+    "pageClassifier",
+    "structureBuilder",
+    "objectExtractor",
+    "queryRouter",
+    "evaluationSet"
+  ],
+  "scope": {
+    "requiredDimensions": ["stage", "subject", "grade"],
+    "recommendedDimensions": ["volume", "publisher", "edition", "bookTitle"]
+  },
+  "qualityTargets": {
+    "tocCompleteness": 0.95,
+    "outOfScopeRefusal": 1,
+    "citationBearingAnswers": 0.85,
+    "displaySerializationErrors": 0
+  }
+}

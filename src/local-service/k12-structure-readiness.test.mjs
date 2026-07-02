@@ -25,6 +25,14 @@ test("K12 structure readiness exposes TOC unit and lesson routes from catalog si
   assert.equal(readiness.summary.units, 1);
   assert.equal(readiness.summary.lessons, 2);
   assert.equal(readiness.summary.tocEntries, 2);
+  assert.equal(readiness.summary.tocCompletenessTarget, 0.95);
+  assert.equal(readiness.summary.tocCompletenessRate, 1);
+  assert.equal(readiness.summary.tocCompletenessPercent, 100);
+  assert.deepEqual(readiness.summary.requiredGates, {
+    tocCompleteness: "pass",
+    lessonPageRanges: "pass",
+    unitLessonLinks: "pass"
+  });
   assert.equal(readiness.summary.lessonsWithPageRange, 2);
   assert.equal(readiness.summary.lessonsWithChunks, 2);
   assert.equal(readiness.summary.lessonsWithCitations, 2);
@@ -48,8 +56,11 @@ test("K12 structure readiness reports gaps when TOC or lesson page ranges are mi
   const readiness = readK12StructureReadinessFromCatalog(state);
 
   assert.equal(readiness.summary.status, "partial");
+  assert.equal(readiness.summary.tocCompletenessRate, 0);
+  assert.equal(readiness.summary.requiredGates.tocCompleteness, "fail");
   assert.equal(readiness.summary.queryRoutes.tocLookup, "blocked");
   assert.equal(readiness.summary.queryRoutes.unitLessonLookup, "blocked");
+  assert.ok(readiness.gaps.some((gap) => gap.key === "tocCompleteness"));
   assert.ok(readiness.gaps.some((gap) => gap.key === "tocEntries"));
   assert.ok(readiness.gaps.some((gap) => gap.key === "lessonPageRanges"));
 });

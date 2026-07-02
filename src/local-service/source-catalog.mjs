@@ -8,6 +8,12 @@ export function syncSourceManifestToCatalog(state, manifest = {}, options = {}) 
   if (!knowledgeBaseId) return { ok: false, documents: 0, versions: 0 };
   const records = sourceRecordsFromManifest(manifest, options);
   const resolution = resolveSourceManifest(state, manifest, { ...options, knowledgeBaseId });
+  const delta = buildSourceDelta(resolution);
+  const deltaByDocumentId = new Map(delta.versionNotes.map((note) => [note.documentId, note]));
+  for (const record of records) {
+    const note = deltaByDocumentId.get(record.documentId);
+    if (note) record.sourceDelta = note;
+  }
   const db = openCatalogDatabase(state, knowledgeBaseId);
   try {
     const write = db.transaction(() => {
@@ -31,7 +37,8 @@ export function syncSourceManifestToCatalog(state, manifest = {}, options = {}) 
       versions: records.length,
       pages: records.length,
       sourceManifest: readSourceManifestFromCatalog(state, { knowledgeBaseId }).summary,
-      resolution: resolution.summary
+      resolution: resolution.summary,
+      delta
     };
   } finally {
     db.close();
@@ -186,6 +193,7 @@ function normalizeSourceRecord(document = {}, context = {}) {
 }
 
 function upsertSourceDocument(db, record) {
+  const metadata = record.sourceDelta ? { ...record.metadata, sourceDelta: record.sourceDelta } : record.metadata;
   db.prepare(`
     INSERT INTO source_documents (
       document_id, title, source_type, original_path, normalized_relative_path,
@@ -212,13 +220,14 @@ function upsertSourceDocument(db, record) {
     record.platformPathHint,
     record.status,
     record.qualityState,
-    stableJson(record.metadata),
+    stableJson(metadata),
     record.createdAt,
     record.updatedAt
   );
 }
 
 function upsertDocumentVersion(db, record) {
+  const metadata = record.sourceDelta ? { ...record.metadata, sourceDelta: record.sourceDelta } : record.metadata;
   db.prepare(`
     INSERT INTO document_versions (
       version_id, document_id, display_version, content_hash, artifact_path,
@@ -238,7 +247,7 @@ function upsertDocumentVersion(db, record) {
     record.contentHash,
     record.artifactPath,
     record.versionStatus,
-    stableJson(record.metadata),
+    stableJson(metadata),
     record.createdAt,
     record.updatedAt
   );
@@ -282,16 +291,16 @@ function upsertSourcePageAnchor(db, record) {
 }
 
 function markMissingDocuments(db, seenDocumentIds, seenVersionIds) {
-  const existingDocuments = db.prepare("SELECT document_id FROM source_documents").all();
-  const existingVersions = db.prepare("SELECT version_id FROM document_versions").all();
+  const existingDocuments = db.prepare("SELECT document_id, status, metadata_json FROM source_documents").all();
+  const existingVersions = db.prepare("SELECT version_id, document_id, status, metadata_json FROM document_versions").all();
   const markDocument = db.prepare(`
     UPDATE source_documents
-    SET status = 'missing', quality_state = 'review', updated_at = ?
+    SET status = 'missing', quality_state = 'review', metadata_json = ?, updated_at = ?
     WHERE document_id = ?
   `);
   const markVersion = db.prepare(`
     UPDATE document_versions
-    SET status = 'missing', updated_at = ?
+    SET status = 'missing', metadata_json = ?, updated_at = ?
     WHERE version_id = ?
   `);
   const markPage = db.prepare(`
@@ -301,11 +310,37 @@ function markMissingDocuments(db, seenDocumentIds, seenVersionIds) {
   `);
   const now = nowIso();
   for (const row of existingDocuments) {
-    if (!seenDocumentIds.has(row.document_id)) markDocument.run(now, row.document_id);
+    if (!seenDocumentIds.has(row.document_id)) {
+      const metadata = {
+        ...parseJson(row.metadata_json, {}),
+        sourceDelta: {
+          documentId: row.document_id || "",
+          versionId: "",
+          changeStatus: "missing",
+          previousStatus: row.status || "",
+          previousContentHash: "",
+          contentHash: "",
+          reason: "source_missing"
+        }
+      };
+      markDocument.run(stableJson(metadata), now, row.document_id);
+    }
   }
   for (const row of existingVersions) {
     if (!seenVersionIds.has(row.version_id)) {
-      markVersion.run(now, row.version_id);
+      const metadata = {
+        ...parseJson(row.metadata_json, {}),
+        sourceDelta: {
+          documentId: row.document_id || "",
+          versionId: row.version_id || "",
+          changeStatus: "missing",
+          previousStatus: row.status || "",
+          previousContentHash: "",
+          contentHash: "",
+          reason: "source_missing"
+        }
+      };
+      markVersion.run(stableJson(metadata), now, row.version_id);
       markPage.run(now, row.version_id);
     }
   }
@@ -361,7 +396,7 @@ function sourceChangeStatus(record, previous) {
   if (record.status === "excluded_by_user") return "excluded_by_user";
   if (record.status === "excluded") return "excluded";
   if (!previous) return "added";
-  if (previous.status === "missing") return "added";
+  if (["missing", "excluded", "excluded_by_user", "out_of_scope"].includes(previous.status)) return "restored";
   if (record.contentHash && previous.contentHash && record.contentHash !== previous.contentHash) return "modified";
   return "unchanged";
 }
@@ -385,6 +420,7 @@ function sourceRecordPayload(record, context = {}) {
     qualityState: record.qualityState || "",
     changeStatus: context.changeStatus || "",
     previousContentHash: context.previous?.contentHash || "",
+    previousStatus: context.previous?.status || "",
     reason: metadata.reason || record.reason || "",
     userReason: metadata.userReason || record.userReason || "",
     originalPath: record.originalPath || "",
@@ -406,6 +442,7 @@ function summarizeResolvedSourceManifest(documents, excludedDocuments, missingDo
   const allCurrent = [...documents, ...excludedDocuments];
   const addedDocuments = documents.filter((document) => document.changeStatus === "added").length;
   const modifiedDocuments = documents.filter((document) => document.changeStatus === "modified").length;
+  const restoredDocuments = documents.filter((document) => document.changeStatus === "restored").length;
   const unchangedDocuments = documents.filter((document) => document.changeStatus === "unchanged").length;
   const userExcludedDocuments = excludedDocuments.filter((document) => document.status === "excluded_by_user").length;
   return {
@@ -417,9 +454,51 @@ function summarizeResolvedSourceManifest(documents, excludedDocuments, missingDo
     sourceParts: allCurrent.reduce((total, document) => total + Math.max(1, document.sourceParts.length), 0),
     addedDocuments,
     modifiedDocuments,
+    restoredDocuments,
     unchangedDocuments,
     missingDocuments: missingDocuments.length,
-    needsAttention: modifiedDocuments + missingDocuments.length
+    needsAttention: modifiedDocuments + restoredDocuments + missingDocuments.length
+  };
+}
+
+function buildSourceDelta(resolution = {}) {
+  const documents = [
+    ...(resolution.documents || []),
+    ...(resolution.excludedDocuments || []),
+    ...(resolution.missingDocuments || [])
+  ];
+  const versionNotes = documents
+    .filter((document) => document.changeStatus && document.changeStatus !== "unchanged")
+    .map((document) => ({
+      documentId: document.documentId || "",
+      versionId: document.versionId || "",
+      title: document.title || "",
+      relativePath: document.relativePath || "",
+      changeStatus: document.changeStatus || "",
+      status: document.status || "",
+      previousStatus: document.previousStatus || "",
+      contentHash: document.contentHash || "",
+      previousContentHash: document.previousContentHash || "",
+      reason: document.reason || document.userReason || ""
+    }));
+  return {
+    kind: "knowmesh.sourceDelta",
+    apiVersion: "1.0.0",
+    generatedAt: nowIso(),
+    knowledgeBase: resolution.knowledgeBase || { id: "" },
+    summary: {
+      addedDocuments: Number(resolution.summary?.addedDocuments || 0),
+      modifiedDocuments: Number(resolution.summary?.modifiedDocuments || 0),
+      restoredDocuments: Number(resolution.summary?.restoredDocuments || 0),
+      excludedDocuments: Number(resolution.summary?.excludedDocuments || 0),
+      missingDocuments: Number(resolution.summary?.missingDocuments || 0),
+      changedDocuments: versionNotes.length
+    },
+    versionNotes,
+    rerunScope: {
+      documentIds: [...new Set(versionNotes.map((note) => note.documentId).filter(Boolean))].sort(),
+      relativePaths: [...new Set(versionNotes.map((note) => note.relativePath).filter(Boolean))].sort()
+    }
   };
 }
 

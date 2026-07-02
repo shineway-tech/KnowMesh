@@ -1,0 +1,24 @@
+{
+  "contractVersion": "2026-07-query-runtime.1",
+  "manifestVersion": "2026-07-integration-manifest.1",
+  "kind": "knowmesh.integrationManifest",
+  "ok": true,
+  "knowledgeBase": {
+    "id": "sample-general-docs",
+    "scoped": true
+  },
+  "integrationBoundary": {
+    "mode": "http-api-only",
+    "summary": "Use the local HTTP API."
+  },
+  "retryPolicy": {
+    "retryable": ["timeout", "network_error", "http_408", "http_429", "http_5xx", "provider_unavailable"],
+    "nonRetryable": ["invalid_request", "out_of_scope", "insufficient_evidence", "blocked_by_quality"]
+  },
+  "endpoints": [
+    { "key": "query", "method": "POST", "scopedPath": "/kb/sample-general-docs/api/query" },
+    { "key": "scopedIntegrationDiagnostics", "method": "GET", "scopedPath": "/kb/sample-general-docs/api/integration/diagnostics" },
+    { "key": "feedbackSummary", "method": "GET", "scopedPath": "/kb/sample-general-docs/api/query/feedback/summary" },
+    { "key": "providerDiagnostics", "method": "GET", "scopedPath": "/kb/sample-general-docs/api/providers/diagnostics" }
+  ]
+}

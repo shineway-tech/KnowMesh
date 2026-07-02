@@ -1,5 +1,14 @@
 import { getAliyunModelSlots, findAliyunModel, recommendedAliyunModel } from "../core/aliyun-model-catalog.mjs";
-import { minimumAliyunPolicy } from "./aliyun.mjs";
+import { extensionCertificationSummary } from "./extension-certification.mjs";
+import { expertRuntimeDiagnostics } from "./expert-runtime.mjs";
+import {
+  builtinProviderAdapterManifests,
+  providerAdapterManifestContract,
+  providerAdapterManifestSummary
+} from "./provider-adapters.mjs";
+import { localParserAdapterPilotContract } from "./providers/local-parser.mjs";
+import { localVectorSidecarContract } from "./providers/local-vector.mjs";
+import { buildProviderRegistry, providerById, providerMode } from "./providers/registry.mjs";
 import { readSetupState } from "./setup-store.mjs";
 
 export function providerCapabilities(state, options = {}) {
@@ -9,12 +18,19 @@ export function providerCapabilities(state, options = {}) {
     ...(options.draft || {})
   };
   const modelSelections = buildModelSelections(setupState);
-  const permissionPolicy = minimumAliyunPolicy(draft).policy;
-  const providers = buildProviders(setupState, draft);
+  const providers = buildProviders(setupState, draft, { state });
   const capabilities = buildCapabilities(providers, modelSelections);
-  const permissionBundles = buildPermissionBundles(permissionPolicy);
+  const permissionBundles = buildPermissionBundles(providers);
   const costPrivacyCards = buildCostPrivacyCards(providers, modelSelections);
   const guidedActions = buildGuidedActions(providers, setupState, draft);
+  const providerAdapterManifests = builtinProviderAdapterManifests();
+  const adapterContracts = buildAdapterContracts();
+  const adapterPilotContracts = buildAdapterPilotContracts();
+  const dryRun = buildProviderDryRun(providers, adapterContracts);
+  const sensitiveDataPolicy = buildSensitiveDataPolicy();
+  const extensionCertification = extensionCertificationSummary();
+  const expertRuntime = expertRuntimeDiagnostics();
+  const localVectorContract = localVectorSidecarContract();
   const summary = summarizeProviders(providers, capabilities, guidedActions);
 
   return {
@@ -29,11 +45,138 @@ export function providerCapabilities(state, options = {}) {
     modelSelections,
     permissionBundles,
     costPrivacyCards,
+    providerAdapterManifestContract: providerAdapterManifestContract(),
+    providerAdapterManifests,
+    providerAdapterManifestSummary: providerAdapterManifestSummary(providerAdapterManifests),
+    adapterContracts,
+    adapterPilotContracts,
+    localVectorSidecarContract: localVectorContract,
+    dryRun,
+    extensionCertification,
+    expertRuntime,
+    sensitiveDataPolicy,
     guidedActions,
     privacy: {
       redacted: true,
       excludes: ["providerTokens", "sourceContent", "documentText", "queryText", "answerText"]
     }
+  };
+}
+
+function buildAdapterPilotContracts() {
+  return [
+    localParserAdapterPilotContract()
+  ];
+}
+
+function buildAdapterContracts() {
+  return [
+    adapterContract("parser", "local-or-provider parsing", ["scan", "extract", "writeExtractionManifest"], "local"),
+    adapterContract("ocr", "OCR and layout recognition", ["prepareBatch", "submitBatch", "readResult", "checkpoint"], "local-or-external"),
+    adapterContract("chat", "citation-grounded answer generation", ["complete", "countTokens", "redactRequest"], "external"),
+    adapterContract("embedding", "chunk embedding generation", ["embedBatch", "splitBatch", "checkpoint"], "external"),
+    adapterContract("rerank", "retrieval reranking", ["rerank", "scoreEvidence"], "external"),
+    adapterContract("vector", "vector index write and query", ["upsertBatch", "query", "deleteByVersion", "health"], "external"),
+    adapterContract("object-store", "source archive and sidecar storage", ["putObject", "getObject", "listObjects", "publishSidecar"], "external")
+  ];
+}
+
+function adapterContract(id, purpose, requiredMethods, boundary) {
+  return {
+    id,
+    interfaceVersion: "1.0.0",
+    purpose,
+    lifecycle: {
+      stage: id === "parser" ? "official" : "experimental",
+      since: "0.1.0-alpha",
+      graduation: "Adapter contracts graduate when implementations declare permissions, dry-run behavior, docs, and tests."
+    },
+    requiredMethods,
+    externalCallBoundary: boundary,
+    checkpointRequired: ["ocr", "embedding", "vector", "object-store"].includes(id),
+    sensitiveDataPolicy: "redacted-local-only"
+  };
+}
+
+function buildProviderDryRun(providers, adapterContracts) {
+  const mappings = adapterContracts.map((contract) => adapterMapping(contract.id, providers));
+  const configured = mappings.filter((item) => item.status === "configured");
+  const missing = mappings.filter((item) => item.status === "missing");
+  const externalCalls = configured
+    .filter((item) => item.boundary === "external")
+    .map((item) => ({
+      adapter: item.adapter,
+      providerId: item.providerId,
+      operation: item.operation,
+      confirmationRequired: true,
+      sendsSourceContent: ["ocr", "chat", "embedding", "rerank"].includes(item.adapter),
+      writesRemoteState: ["vector", "object-store"].includes(item.adapter)
+    }));
+  return {
+    ok: missing.length === 0,
+    kind: "knowmesh.providerDryRun",
+    summary: {
+      configured: configured.length,
+      missing: missing.length,
+      externalCallsBeforeExecution: externalCalls.length
+    },
+    configured,
+    missing,
+    externalCalls
+  };
+}
+
+function adapterMapping(adapter, providers) {
+  const localParser = providerById(providers, "local-parser");
+  const localOcr = providerById(providers, "local-ocr");
+  const localVector = providerById(providers, "local-vector");
+  const modelStudio = providerById(providers, "aliyun-model-studio");
+  const ossVector = providerById(providers, "aliyun-oss-vector");
+  const ossStorage = providerById(providers, "aliyun-oss-storage");
+  if (adapter === "parser") return mapping(adapter, localParser, "local", "extract");
+  if (adapter === "ocr") {
+    if (modelStudio?.configured) return mapping(adapter, modelStudio, "external", "documentOcr");
+    return localOcr?.configured ? mapping(adapter, localOcr, "local", "documentOcr") : missingMapping(adapter, "Configure local OCR or Model Studio OCR before OCR execution.");
+  }
+  if (adapter === "chat") return modelStudio?.configured ? mapping(adapter, modelStudio, "external", "chatAnswer") : missingMapping(adapter, "Configure a chat provider before answer generation.");
+  if (adapter === "embedding") return modelStudio?.configured ? mapping(adapter, modelStudio, "external", "embedding") : missingMapping(adapter, "Configure an embedding provider before vector writes.");
+  if (adapter === "rerank") return modelStudio?.configured ? mapping(adapter, modelStudio, "external", "rerank") : missingMapping(adapter, "Configure a rerank provider before reranking.");
+  if (adapter === "vector") {
+    if (ossVector?.configured) return mapping(adapter, ossVector, "external", "vectorSearch");
+    return localVector?.configured ? mapping(adapter, localVector, "local", "localVectorSearch") : missingMapping(adapter, "Configure OSS Vector or enable a local vector provider before vector search.");
+  }
+  if (adapter === "object-store") return ossStorage?.configured ? mapping(adapter, ossStorage, "external", "sourceArchive") : missingMapping(adapter, "Configure object storage before source archive or sidecar publication.");
+  return missingMapping(adapter, "No provider mapping is registered.");
+}
+
+function mapping(adapter, provider, boundary, operation) {
+  return {
+    adapter,
+    providerId: provider?.id || "",
+    boundary,
+    operation,
+    status: "configured"
+  };
+}
+
+function missingMapping(adapter, reason) {
+  return {
+    adapter,
+    providerId: "",
+    boundary: "",
+    operation: "",
+    status: "missing",
+    reason
+  };
+}
+
+function buildSensitiveDataPolicy() {
+  return {
+    redacted: true,
+    storage: "local-secure-files-only",
+    excludedFrom: ["sqlite", "diagnostics", "packagePreviews", "logs", "publicSamples", "sidecars"],
+    diagnostics: "capabilities-only",
+    packagePreviews: "paths-counts-checks-only"
   };
 }
 
@@ -51,59 +194,8 @@ function safeReadSetupState(state) {
   }
 }
 
-function buildProviders(setupState, draft) {
-  const credentialReady = Boolean(setupState.credential?.configured);
-  const storageReady = credentialReady && Boolean(
-    draft["aliyun.storage.confirmed"] === true
-      || draft["aliyun.storage.bucket"]
-      || draft["aliyun.oss.bucket"]
-  );
-  const modelProviderReady = Boolean(setupState.modelProvider?.configured);
-  const modelQualityReady = Boolean(setupState.modelQuality?.configured);
-  const searchReady = Boolean(setupState.search?.configured || (draft["aliyun.search.bucket"] && draft["aliyun.search.index"]));
-
-  return [
-    provider(
-      "local-catalog",
-      "本地目录与 SQLite",
-      "Local Catalog and SQLite",
-      "local",
-      true,
-      "pass",
-      "workspace.sqlite 与每个知识库 catalog.sqlite 始终在本机运行。",
-      "workspace.sqlite and each knowledge-base catalog.sqlite always run locally."
-    ),
-    provider(
-      "aliyun-oss-storage",
-      "阿里云 OSS 资料保存",
-      "Alibaba Cloud OSS Source Storage",
-      "cloud-storage",
-      storageReady,
-      storageReady ? "pass" : "setupRequired",
-      storageReady ? "资料保存空间已配置。" : "需要先确认阿里云资料保存空间。",
-      storageReady ? "Source storage is configured." : "Confirm Alibaba Cloud source storage first."
-    ),
-    provider(
-      "aliyun-model-studio",
-      "阿里百炼模型服务",
-      "Alibaba Cloud Model Studio",
-      "cloud-model",
-      modelProviderReady && modelQualityReady,
-      modelProviderReady && modelQualityReady ? "pass" : "setupRequired",
-      modelProviderReady && modelQualityReady ? "模型连接与模型方案已配置。" : "需要配置模型连接并保存模型方案。",
-      modelProviderReady && modelQualityReady ? "Model connection and model profile are configured." : "Configure the model connection and save the model profile."
-    ),
-    provider(
-      "aliyun-oss-vector",
-      "OSS 向量检索",
-      "OSS Vector Search",
-      "cloud-vector",
-      credentialReady && searchReady,
-      credentialReady && searchReady ? "pass" : "setupRequired",
-      credentialReady && searchReady ? "向量 Bucket 与索引已配置。" : "需要配置 OSS 向量 Bucket 与索引。",
-      credentialReady && searchReady ? "Vector bucket and index are configured." : "Configure the OSS vector bucket and index."
-    )
-  ];
+function buildProviders(setupState, draft, options = {}) {
+  return buildProviderRegistry(setupState, { draft, state: options.state });
 }
 
 function buildModelSelections(setupState) {
@@ -136,60 +228,45 @@ function buildModelSelections(setupState) {
 }
 
 function buildCapabilities(providers, modelSelections) {
-  return [
-    capability("localCatalog", "local-catalog", "本地目录查询", "Local catalog queries", ["workspace.sqlite", "catalog.sqlite"]),
-    capability("sourceArchive", "aliyun-oss-storage", "资料归档", "Source archive", ["oss:ObjectReadWrite"]),
-    capability("documentOcr", "aliyun-model-studio", "OCR / 文档识别", "OCR / document recognition", [modelSelections.ocr?.modelId]),
-    capability("contentOrganization", "aliyun-model-studio", "内容整理", "Content organization", [modelSelections.organizer?.modelId]),
-    capability("embedding", "aliyun-model-studio", "向量化", "Embedding", [modelSelections.embedding?.modelId]),
-    capability("rerank", "aliyun-model-studio", "重排", "Rerank", [modelSelections.rerank?.modelId]),
-    capability("chatAnswer", "aliyun-model-studio", "回答生成", "Answer generation", [modelSelections.organizer?.modelId]),
-    capability("vectorStorage", "aliyun-oss-vector", "向量写入", "Vector writes", ["PutVectors"]),
-    capability("vectorSearch", "aliyun-oss-vector", "向量检索", "Vector search", ["QueryVectors"])
-  ].map((item) => ({
+  return providers.flatMap((provider) => provider.capabilities.map((item) => ({
     ...item,
-    status: providerById(providers, item.providerId)?.configured ? "available" : "setupRequired"
-  }));
+    providerId: provider.id,
+    operations: capabilityOperations(item, modelSelections),
+    status: capabilityStatus(provider)
+  })));
 }
 
-function buildPermissionBundles(policy) {
-  const actions = (providerId, predicate) => unique(policy.Statement
-    .flatMap((statement) => Array.isArray(statement.Action) ? statement.Action : [])
-    .filter(predicate));
-  return [
-    permissionBundle("aliyun-oss-storage", actions("aliyun-oss-storage", (item) => item.startsWith("oss:") && !item.includes("Vector"))),
-    permissionBundle("aliyun-oss-vector", actions("aliyun-oss-vector", (item) => item.startsWith("oss:") && item.includes("Vector"))),
-    permissionBundle("aliyun-model-studio", actions("aliyun-model-studio", (item) => item.startsWith("dashscope:")))
-  ].filter((item) => item.actions.length);
+function capabilityOperations(item, modelSelections) {
+  const selectedModels = {
+    documentOcr: modelSelections.ocr?.modelId,
+    contentOrganization: modelSelections.organizer?.modelId,
+    embedding: modelSelections.embedding?.modelId,
+    rerank: modelSelections.rerank?.modelId,
+    chatAnswer: modelSelections.organizer?.modelId
+  };
+  return unique([selectedModels[item.key], ...(item.operations || [])]);
+}
+
+function capabilityStatus(provider) {
+  if (provider.status === "disabled") return "disabled";
+  return provider.configured ? "available" : "setupRequired";
+}
+
+function buildPermissionBundles(providers) {
+  return providers
+    .filter((item) => item.permissions.length)
+    .map((item) => permissionBundle(item.id, item.permissions));
 }
 
 function buildCostPrivacyCards(providers, modelSelections) {
-  return [
-    costPrivacyCard("local-catalog", "本地计算与磁盘", "Local CPU and disk", ["local_cpu", "local_disk"], {
-      dataLeavesDevice: false,
-      storesSource: false,
-      storesVectors: false,
-      redacted: true
-    }),
-    costPrivacyCard("aliyun-oss-storage", "OSS 存储与请求", "OSS storage and requests", ["storage_gb_month", "request_count", "egress_if_applicable"], {
-      dataLeavesDevice: true,
-      storesSource: true,
-      storesVectors: false,
-      redacted: true
-    }),
-    costPrivacyCard("aliyun-model-studio", "模型调用", "Model calls", ["model_calls", "input_tokens", "output_tokens", "ocr_pages"], {
-      dataLeavesDevice: true,
-      storesSource: false,
-      storesVectors: false,
-      redacted: true
-    }, modelPricingLinks(modelSelections)),
-    costPrivacyCard("aliyun-oss-vector", "OSS Vector 存储与查询", "OSS Vector storage and queries", ["vector_storage", "vector_writes", "vector_queries"], {
-      dataLeavesDevice: true,
-      storesSource: false,
-      storesVectors: true,
-      redacted: true
-    })
-  ].map((card) => ({
+  return providers.map((provider) => costPrivacyCard(
+    provider.id,
+    provider.label.zh,
+    provider.label.en,
+    provider.cost?.units || [],
+    provider.privacyBoundary,
+    provider.id === "aliyun-model-studio" ? modelPricingLinks(modelSelections) : []
+  )).map((card) => ({
     ...card,
     configured: Boolean(providerById(providers, card.providerId)?.configured)
   }));
@@ -197,6 +274,8 @@ function buildCostPrivacyCards(providers, modelSelections) {
 
 function buildGuidedActions(providers, setupState, draft) {
   const actions = [];
+  const mode = providerMode(setupState, draft);
+  if (mode === "local") return actions;
   if (!setupState.credential?.configured) {
     actions.push(guidedAction("configureCloudCredential", "/setup/aliyun/credential", "配置阿里云凭证", "Configure Aliyun Credential", "用于 OSS、OSS Vector 和权限检查。", "Used for OSS, OSS Vector, and permission checks."));
   }
@@ -222,7 +301,8 @@ function summarizeProviders(providers, capabilities, guidedActions) {
   const providerCounts = {
     total: providers.length,
     configured: providers.filter((item) => item.configured).length,
-    setupRequired: providers.filter((item) => !item.configured).length
+    setupRequired: providers.filter((item) => item.status === "setupRequired").length,
+    disabled: providers.filter((item) => item.status === "disabled").length
   };
   return {
     status: guidedActions.length ? "attention" : "ready",
@@ -230,29 +310,10 @@ function summarizeProviders(providers, capabilities, guidedActions) {
     capabilities: {
       total: capabilities.length,
       available: capabilities.filter((item) => item.status === "available").length,
-      setupRequired: capabilities.filter((item) => item.status === "setupRequired").length
+      setupRequired: capabilities.filter((item) => item.status === "setupRequired").length,
+      disabled: capabilities.filter((item) => item.status === "disabled").length
     },
     actionCount: guidedActions.length
-  };
-}
-
-function provider(id, zhLabel, enLabel, type, configured, status, zhMessage, enMessage) {
-  return {
-    id,
-    type,
-    configured,
-    status,
-    label: { zh: zhLabel, en: enLabel },
-    message: { zh: zhMessage, en: enMessage }
-  };
-}
-
-function capability(key, providerId, zhLabel, enLabel, operations) {
-  return {
-    key,
-    providerId,
-    label: { zh: zhLabel, en: enLabel },
-    operations: operations.filter(Boolean)
   };
 }
 
@@ -298,10 +359,6 @@ function guidedAction(key, href, zhLabel, enLabel, zhMessage, enMessage) {
     label: { zh: zhLabel, en: enLabel },
     message: { zh: zhMessage, en: enMessage }
   };
-}
-
-function providerById(providers, id) {
-  return providers.find((item) => item.id === id) || null;
 }
 
 function unique(values) {

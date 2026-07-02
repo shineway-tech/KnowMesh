@@ -66,6 +66,58 @@ test("source manifest resolver reports added modified missing and out-of-scope d
   assert.equal(readCatalogScalar(state, kb.id, "select status from document_versions where version_id = ?", ["ver-alpha-v2"]), "planned");
 });
 
+test("source manifest sync reports restored source deltas and persists version notes", () => {
+  const { state } = tempState("knowmesh-source-manifest-delta-");
+  const kb = createKnowledgeBase(state, { name: "Source Delta", template: "general-docs" });
+  const workspaceRoot = state.defaultSetupDraft["project.workspace"];
+
+  syncSourceManifestToCatalog(state, sourceManifest([
+    sourceDocument("alpha.txt", "hash-alpha-v1", { documentId: "doc-alpha", versionId: "ver-alpha-v1" }),
+    sourceDocument("beta.txt", "hash-beta-v1", { documentId: "doc-beta", versionId: "ver-beta-v1" }),
+    sourceDocument("delta.txt", "hash-delta-v1", { documentId: "doc-delta", versionId: "ver-delta-v1" })
+  ]), { workspaceRoot });
+
+  syncSourceManifestToCatalog(state, sourceManifest([
+    sourceDocument("alpha.txt", "hash-alpha-v1", { documentId: "doc-alpha", versionId: "ver-alpha-v1" }),
+    sourceDocument("delta.txt", "hash-delta-v1", { documentId: "doc-delta", versionId: "ver-delta-v1" })
+  ], [
+    sourceDocument("beta.txt", "hash-beta-v1", { documentId: "doc-beta", versionId: "ver-beta-excluded", reason: "excluded_by_user" })
+  ]), { workspaceRoot });
+
+  const third = sourceManifest([
+    sourceDocument("alpha.txt", "hash-alpha-v2", { documentId: "doc-alpha", versionId: "ver-alpha-v2" }),
+    sourceDocument("beta.txt", "hash-beta-v2", { documentId: "doc-beta", versionId: "ver-beta-v2" }),
+    sourceDocument("gamma.txt", "hash-gamma-v1", { documentId: "doc-gamma", versionId: "ver-gamma-v1" })
+  ]);
+  const resolved = resolveSourceManifest(state, third, { workspaceRoot });
+  const synced = syncSourceManifestToCatalog(state, third, { workspaceRoot });
+
+  assert.equal(resolved.summary.modifiedDocuments, 1);
+  assert.equal(resolved.summary.restoredDocuments, 1);
+  assert.equal(resolved.summary.addedDocuments, 1);
+  assert.equal(resolved.summary.missingDocuments, 1);
+  assert.equal(resolved.documents.find((document) => document.documentId === "doc-beta").changeStatus, "restored");
+  assert.equal(resolved.missingDocuments[0].documentId, "doc-delta");
+
+  assert.equal(synced.delta.summary.modifiedDocuments, 1);
+  assert.equal(synced.delta.summary.restoredDocuments, 1);
+  assert.equal(synced.delta.summary.addedDocuments, 1);
+  assert.equal(synced.delta.summary.missingDocuments, 1);
+  assert.deepEqual(synced.delta.rerunScope.documentIds.sort(), ["doc-alpha", "doc-beta", "doc-delta", "doc-gamma"]);
+  assert.deepEqual(synced.delta.versionNotes.map((note) => `${note.documentId}:${note.changeStatus}`).sort(), [
+    "doc-alpha:modified",
+    "doc-beta:restored",
+    "doc-delta:missing",
+    "doc-gamma:added"
+  ]);
+
+  const betaMetadata = JSON.parse(readCatalogScalar(state, kb.id, "select metadata_json from document_versions where version_id = ?", ["ver-beta-v2"]));
+  const deltaMetadata = JSON.parse(readCatalogScalar(state, kb.id, "select metadata_json from document_versions where version_id = ?", ["ver-delta-v1"]));
+  assert.equal(betaMetadata.sourceDelta.changeStatus, "restored");
+  assert.equal(betaMetadata.sourceDelta.previousStatus, "excluded_by_user");
+  assert.equal(deltaMetadata.sourceDelta.changeStatus, "missing");
+});
+
 test("source manifest sync stores split logical documents with normalized paths and source parts", async () => {
   const { state, sourceRoot, workspaceRoot } = tempState("knowmesh-source-manifest-split-");
   createKnowledgeBase(state, { name: "Source Manifest 分卷测试", template: "general-docs" });

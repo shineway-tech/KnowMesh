@@ -1,0 +1,28 @@
+{
+  "id": "knowmesh.experts.operations-handbook.schema",
+  "version": "1.0.0",
+  "objects": [
+    "policy",
+    "procedure",
+    "workflow",
+    "workflow_step",
+    "role",
+    "exception",
+    "owner",
+    "review_cadence",
+    "rollback_rule",
+    "evidence_requirement"
+  ],
+  "relations": [
+    "owned_by",
+    "requires",
+    "supersedes",
+    "cites",
+    "has_exception",
+    "has_role",
+    "requires_evidence"
+  ],
+  "qualityStates": ["primary", "weighted", "review", "archive"],
+  "requiredCitationFields": ["document_id", "sourceUri", "page_start", "excerpt"],
+  "publicFixtureOnly": true
+}

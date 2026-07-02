@@ -1,0 +1,46 @@
+name: Launch feedback
+description: Share public-launch feedback with safe reproduction evidence.
+title: "[Launch feedback]: "
+labels: ["triage:launch", "triage:intake"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Public launch feedback intake: use public samples when possible and include no private data, credentials, SQLite files, local absolute paths, private source text, or raw provider payloads.
+  - type: textarea
+    id: summary
+    attributes:
+      label: Feedback summary
+      description: What did you expect to understand or do, and where did KnowMesh fall short?
+    validations:
+      required: true
+  - type: textarea
+    id: commands
+    attributes:
+      label: Reproduction commands
+      description: Paste safe commands or steps using public samples whenever possible.
+      placeholder: |
+        npm install
+        npm run smoke:public-launch
+        npm run smoke:release-candidate
+    validations:
+      required: true
+  - type: dropdown
+    id: area
+    attributes:
+      label: Area
+      options:
+        - README / discovery
+        - Getting started
+        - Public samples
+        - Query Runtime
+        - Integration examples
+        - Expert / K12
+        - Provider adapters
+        - Release evidence
+        - Contributor path
+  - type: textarea
+    id: safe_evidence
+    attributes:
+      label: Safe evidence
+      description: Paste redacted logs, screenshots, or command output. Include no private data.

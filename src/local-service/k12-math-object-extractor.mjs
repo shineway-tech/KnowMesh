@@ -1,5 +1,6 @@
 import { k12TemplateId } from "../core/document-scope.mjs";
 import { currentKnowledgeBaseId, listKnowledgeBases } from "./knowledge-bases.mjs";
+import { requireK12RelationType } from "./k12-object-contract.mjs";
 import { nowIso, openCatalogDatabase, parseJson } from "./storage.mjs";
 
 export function extractK12MathObjectsFromCatalog(state, options = {}) {
@@ -108,11 +109,12 @@ function buildFormulaExerciseRelations(objects) {
     const exercise = exercises.find((item) => item.documentId === formula.documentId && item.structureNodeId === formula.structureNodeId && item.sourcePage === formula.sourcePage)
       || exercises.find((item) => item.documentId === formula.documentId && item.structureNodeId === formula.structureNodeId);
     if (!exercise) continue;
+    const relationType = requireK12RelationType("formula_to_exercise");
     relations.push({
-      relationId: `relation:${formula.objectId}:supports_exercise:${exercise.objectId}`,
+      relationId: `relation:${formula.objectId}:${relationType}:${exercise.objectId}`,
       sourceObjectId: formula.objectId,
       targetObjectId: exercise.objectId,
-      relationType: "supports_exercise",
+      relationType,
       documentId: formula.documentId,
       structureNodeId: formula.structureNodeId,
       qualityState: formula.qualityState,

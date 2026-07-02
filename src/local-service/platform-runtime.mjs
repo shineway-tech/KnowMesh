@@ -2,7 +2,10 @@ import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
 
-import { buildOpenPathCommand } from "./local-paths.mjs";
+import { buildOpenPathCommand, buildRevealPathCommand } from "./local-paths.mjs";
+import { inspectLocalOcrAdapterDependencies } from "./providers/local-ocr.mjs";
+import { inspectLocalParserAdapterDependencies } from "./providers/local-parser.mjs";
+import { inspectLocalVectorAdapterDependencies } from "./providers/local-vector.mjs";
 
 const fallbackMinimumNodeMajor = 24;
 const fallbackPackagedNodeVersion = "v24.18.0";
@@ -20,6 +23,7 @@ export function platformRuntimeInventory(state, options = {}) {
   const launchers = inspectLaunchers(projectRoot, platform);
   const packagedNodeVersion = launchers.privateRuntimeVersion || fallbackPackagedNodeVersion;
   const node = inspectNodeRuntime({ nodePath, nodeVersion, runtimeRoot, platform, arch, minimumNodeMajor, packagedNodeVersion });
+  const launchReliability = buildLaunchReliability({ platform, node, launchers, minimumNodeMajor, packagedNodeVersion });
   const dependencies = inspectDependencies(state, {
     projectRoot,
     packageInfo,
@@ -44,6 +48,7 @@ export function platformRuntimeInventory(state, options = {}) {
       release: options.release || os.release()
     },
     node,
+    launchReliability,
     workspace: {
       projectRoot,
       runtimeRoot,
@@ -99,7 +104,8 @@ function inspectLaunchers(projectRoot, platform) {
       relativePath: definition.relativePath.replaceAll("\\", "/"),
       exists: fs.existsSync(absolutePath),
       nodeInstaller: hasPrivateRuntimeInstaller(content),
-      nodeVersion: extractPackagedNodeVersion(content)
+      nodeVersion: extractPackagedNodeVersion(content),
+      mutatesPath: launcherContentMutatesPath(content)
     };
   });
   const requiredItems = items.filter((item) => item.required);
@@ -117,13 +123,117 @@ function inspectLaunchers(projectRoot, platform) {
   };
 }
 
+function buildLaunchReliability({ platform, node, launchers, minimumNodeMajor, packagedNodeVersion }) {
+  const supportedLaunchers = launchers.items
+    .filter((item) => item.platform.includes(platform))
+    .map((item) => ({
+      key: item.key,
+      platform: item.platform,
+      required: item.required,
+      relativePath: item.relativePath,
+      exists: item.exists,
+      privateRuntimeInstaller: item.nodeInstaller,
+      mutatesPath: item.mutatesPath
+    }));
+  const required = supportedLaunchers.filter((item) => item.required);
+  const missing = required.filter((item) => !item.exists);
+  const pathMutating = required.filter((item) => item.mutatesPath);
+  const canPrepare = required.some((item) => item.exists && item.privateRuntimeInstaller);
+  const status = node.status === "pass" && missing.length === 0 && pathMutating.length === 0 && canPrepare ? "pass" : "attention";
+
+  return {
+    status,
+    apiVersion: "1.0.0",
+    minimumNodeMajor,
+    browserTarget: {
+      protocol: "http",
+      host: "127.0.0.1",
+      defaultPort: 7457,
+      localhostOnly: true
+    },
+    portFallback: {
+      supported: true,
+      attemptsWhenFixedPortBusy: 20
+    },
+    stateAuthority: {
+      workspace: "workspace.sqlite",
+      catalog: "catalog.sqlite",
+      browserStorage: "visual-preferences-only",
+      implicitKnowledgeBase: false
+    },
+    privateRuntime: {
+      canPrepare,
+      packagedVersion: packagedNodeVersion
+    },
+    pathMutationGuard: {
+      mutatesPath: pathMutating.length > 0,
+      checkedPatterns: ["PATH=", "export PATH=", "$env:Path", "setx", "SetEnvironmentVariable"],
+      offenders: pathMutating.map((item) => item.relativePath)
+    },
+    supportedLaunchers,
+    nextActions: launchReliabilityNextActions({ node, missing, pathMutating, canPrepare })
+  };
+}
+
+function launchReliabilityNextActions({ node, missing, pathMutating, canPrepare }) {
+  const actions = [];
+  if (node.status !== "pass") {
+    actions.push(guidedAction(
+      "upgradeNode",
+      "安装 Node 24+ 或使用启动器",
+      "Install Node 24+ or use launcher",
+      "当前 Node 版本低于运行要求；使用 KnowMesh 启动器可准备私有运行时。",
+      "The current Node version is below the runtime requirement; use the KnowMesh launcher to prepare a private runtime."
+    ));
+  }
+  if (missing.length) {
+    actions.push(guidedAction(
+      "restoreLaunchers",
+      "恢复启动器文件",
+      "Restore Launcher Files",
+      `缺少启动器：${missing.map((item) => item.relativePath).join(", ")}。`,
+      `Missing launcher(s): ${missing.map((item) => item.relativePath).join(", ")}.`
+    ));
+  }
+  if (!canPrepare) {
+    actions.push(guidedAction(
+      "usePackagedRuntimeLauncher",
+      "保留私有运行时启动器",
+      "Keep Private Runtime Launcher",
+      "启动器需要能在缺少系统 Node 时准备私有 Node 运行时。",
+      "The launcher must be able to prepare a private Node runtime when system Node is missing."
+    ));
+  }
+  if (pathMutating.length) {
+    actions.push(guidedAction(
+      "removePathMutation",
+      "移除 PATH 修改",
+      "Remove PATH Mutation",
+      "启动器不应永久修改用户 PATH；请改为进程内直接调用私有 Node。",
+      "Launchers should not permanently mutate user PATH; invoke the private Node process directly instead."
+    ));
+  }
+  return actions;
+}
+
 function inspectDependencies(state, context) {
   return {
     packageDependencies: inspectPackageDependencies(context.projectRoot, context.packageInfo),
     fileOpen: inspectFileOpen(context.projectRoot, context.platform, context.env),
+    folderPicker: inspectFolderPicker(context.platform),
+    fileReveal: inspectFileReveal(context.projectRoot, context.platform, context.env),
     runtimeDownloader: inspectRuntimeDownloader(context.platform, context.env),
     officeConverter: inspectOfficeConverter(state, context),
-    pdfRenderer: inspectPdfRenderer(state, context)
+    pdfRenderer: inspectPdfRenderer(state, context),
+    providerAdapters: inspectProviderAdapters(state, context)
+  };
+}
+
+function inspectProviderAdapters(state, context) {
+  return {
+    localParser: inspectLocalParserAdapterDependencies(state, context),
+    localOcr: inspectLocalOcrAdapterDependencies(state, context),
+    localVector: inspectLocalVectorAdapterDependencies(state, context)
   };
 }
 
@@ -153,6 +263,39 @@ function inspectFileOpen(projectRoot, platform, env) {
     message: status === "pass"
       ? label("可以调用系统文件管理器打开文件夹。", "The system file manager can be used.")
       : label("没有找到系统打开文件夹命令。", "The folder-open command was not found.")
+  };
+}
+
+function inspectFolderPicker(platform) {
+  if (platform === "win32") {
+    return {
+      status: "pass",
+      mode: "native-dialog",
+      command: "PowerShell IFileOpenDialog",
+      message: label("可以调用系统目录选择框。", "The native folder picker can be used.")
+    };
+  }
+  return {
+    status: "pass",
+    mode: "manual-path",
+    command: "",
+    message: label("可以直接粘贴目录路径继续配置。", "Folder paths can be pasted directly to continue setup.")
+  };
+}
+
+function inspectFileReveal(projectRoot, platform, env) {
+  const command = buildRevealPathCommand(projectRoot, platform);
+  const resolvedCommand = commandAvailable(command.command, { platform, env, osProvided: ["explorer.exe", "open"] });
+  const status = resolvedCommand ? "pass" : "warn";
+  return {
+    status,
+    command: command.command,
+    resolvedCommand,
+    selected: command.selected,
+    argsPreview: command.args,
+    message: status === "pass"
+      ? label("可以在系统文件管理器中定位文件。", "Files can be revealed in the system file manager.")
+      : label("没有找到用于定位文件的系统命令。", "The system file-reveal command was not found.")
   };
 }
 
@@ -224,6 +367,8 @@ function buildChecks({ node, launchers, dependencies }) {
     ),
     runtimeCheck("packageDependencies", dependencies.packageDependencies.status, "应用依赖", "App Dependencies", dependencies.packageDependencies.message),
     runtimeCheck("fileOpen", dependencies.fileOpen.status, "文件打开", "Open Folder", dependencies.fileOpen.message),
+    runtimeCheck("folderPicker", dependencies.folderPicker.status, "目录选择", "Folder Picker", dependencies.folderPicker.message),
+    runtimeCheck("fileReveal", dependencies.fileReveal.status, "定位文件", "Reveal File", dependencies.fileReveal.message),
     runtimeCheck("runtimeDownloader", dependencies.runtimeDownloader.status, "运行时下载", "Runtime Download", dependencies.runtimeDownloader.message),
     runtimeCheck("officeConverter", dependencies.officeConverter.status, "旧格式转换", "Legacy Conversion", dependencies.officeConverter.message),
     runtimeCheck("pdfRenderer", dependencies.pdfRenderer.status, "PDF 拆页", "PDF Rendering", dependencies.pdfRenderer.message)
@@ -266,6 +411,15 @@ function buildGuidedActions({ node, launchers, dependencies, platform }) {
       "Install Downloader",
       "安装 curl 或 wget，便于启动器自动下载私有 Node 运行时。",
       "Install curl or wget so the launcher can download the private Node runtime."
+    ));
+  }
+  if (dependencies.fileReveal.status === "warn") {
+    actions.push(guidedAction(
+      "installFileManager",
+      "安装文件管理器",
+      "Install File Manager",
+      platform === "linux" ? "安装 xdg-open 所属的桌面文件管理工具，或继续手动打开目录。" : "恢复系统文件管理器命令，或继续手动打开目录。",
+      platform === "linux" ? "Install the desktop file-manager tools that provide xdg-open, or open folders manually." : "Restore the system file-manager command, or open folders manually."
     ));
   }
   if (dependencies.officeConverter.status === "warn") {
@@ -352,6 +506,15 @@ function readTextIfSmall(file) {
 function hasPrivateRuntimeInstaller(content) {
   return /KNOWMESH_NODE_VERSION|NODE_VERSION/.test(content)
     && /private Node runtime|private runtime|Install-KnowMeshNode|install_knowmesh_node/i.test(content);
+}
+
+function launcherContentMutatesPath(content) {
+  const text = String(content || "");
+  return /\bsetx\b/i.test(text)
+    || /SetEnvironmentVariable\s*\(/i.test(text)
+    || /(?:^|\r?\n)\s*\$env:Path\s*=/i.test(text)
+    || /(?:^|\r?\n)\s*(?:set\s+PATH|PATH)\s*=/i.test(text)
+    || /(?:^|\r?\n)\s*export\s+PATH\s*=/i.test(text);
 }
 
 function extractPackagedNodeVersion(content) {

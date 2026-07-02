@@ -2,6 +2,7 @@ import crypto from "node:crypto";
 
 import { currentKnowledgeBaseId, listKnowledgeBases } from "./knowledge-bases.mjs";
 import { providerCapabilities } from "./provider-capabilities.mjs";
+import { publicSampleOwnershipSummary } from "./public-samples.mjs";
 import { readChunkManifestFromCatalog, readIndexManifestFromCatalog } from "./retrieval-manifests.mjs";
 import { readExtractionManifestFromCatalog } from "./extraction-manifest.mjs";
 import { readSourceManifestFromCatalog } from "./source-catalog.mjs";
@@ -26,6 +27,7 @@ export function buildExportPackagePreview(state, input = {}) {
   }
 
   const manifest = buildPackageManifest(state, knowledgeBase);
+  const sampleOwnership = manifest.sampleOwnership || publicSampleOwnershipSummary(state, knowledgeBase.id);
   return {
     ok: true,
     kind: "knowmesh.packageExportPreview",
@@ -40,7 +42,12 @@ export function buildExportPackagePreview(state, input = {}) {
         en: "After confirmation a real archive can be produced; preview does not copy raw sources or write new state."
       },
       includes: manifest.contents.includes,
-      excludes: manifest.privacy.excludes
+      excludes: manifest.privacy.excludes,
+      resetSafety: {
+        sampleOwnedOnly: sampleOwnership.publicSample === true,
+        removesNormalKnowledgeBases: false,
+        cleanupScope: sampleOwnership.cleanupScope
+      }
     },
     checks: [
       check("knowledgeBase", "pass", "知识库", "Knowledge base", `将导出 ${knowledgeBase.name || knowledgeBase.id}。`, `${knowledgeBase.name || knowledgeBase.id} will be exported.`),
@@ -87,6 +94,7 @@ function buildPackageManifest(state, knowledgeBase) {
   const versionManifest = readVersionManifestFromCatalog(state, { knowledgeBaseId });
   const artifacts = readPackageArtifacts(state, knowledgeBaseId);
   const providers = providerCapabilities({ ...state, knowledgeBaseId });
+  const sampleOwnership = publicSampleOwnershipSummary(state, knowledgeBaseId);
   const generatedAt = nowIso();
   const baseManifest = {
     kind: "knowmesh.packageManifest",
@@ -101,6 +109,7 @@ function buildPackageManifest(state, knowledgeBase) {
       createdAt: knowledgeBase.createdAt || "",
       updatedAt: knowledgeBase.updatedAt || ""
     },
+    sampleOwnership,
     contents: {
       includes: ["workspaceRegistration", "catalogSummaries", "versionManifest", "artifactChecksums", "providerCapabilityContract"],
       excludes: privacyExcludes

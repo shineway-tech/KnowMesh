@@ -25,11 +25,20 @@ test("K12 evaluation manifest summarizes build results and quality risks without
   assert.equal(manifest.summary.cases, 4);
   assert.equal(manifest.summary.results, 4);
   assert.equal(manifest.summary.coveragePercent, 100);
+  assert.deepEqual(manifest.summary.qualityTargets, {
+    evaluationCoverageRate: 1,
+    outOfScopeRefusalRate: 1,
+    tocLookupPassRate: 0.95,
+    citationBearingUsableAnswerRate: 0.85
+  });
   assert.equal(manifest.summary.passed, 2);
   assert.equal(manifest.summary.failed, 1);
   assert.equal(manifest.summary.review, 1);
   assert.equal(manifest.summary.categories.toc_lookup.cases, 1);
   assert.equal(manifest.summary.categories.out_of_scope_refusal.failed, 1);
+  assert.equal(manifest.summary.categoryRates.out_of_scope_refusal.passRate, 0);
+  assert.equal(manifest.summary.categoryRates.toc_lookup.passRate, 1);
+  assert.equal(manifest.summary.outOfScopeRefusalRate, 0);
   assert.equal(manifest.summary.requiredGates.outOfScopeRefusal, "fail");
   assert.equal(manifest.summary.requiredGates.evaluationCoverage, "pass");
   assert.equal(manifest.risks[0].key, "outOfScopeRefusal");
@@ -50,6 +59,7 @@ test("K12 evaluation manifest reports partial coverage for active cases without 
   assert.equal(manifest.summary.cases, 4);
   assert.equal(manifest.summary.results, 0);
   assert.equal(manifest.summary.coveragePercent, 0);
+  assert.equal(manifest.summary.outOfScopeRefusalRate, 0);
   assert.ok(manifest.risks.some((risk) => risk.key === "evaluationCoverage"));
 });
 

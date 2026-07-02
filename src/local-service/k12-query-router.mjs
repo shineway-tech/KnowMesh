@@ -1,5 +1,6 @@
 import { compactFromAnyMetadata, describeK12Scope, extractK12QueryConstraints } from "../core/k12-metadata.mjs";
 import { currentKnowledgeBaseId } from "./knowledge-bases.mjs";
+import { normalizeK12ObjectType, normalizeK12RelationType } from "./k12-object-contract.mjs";
 import { openCatalogDatabase, parseJson } from "./storage.mjs";
 
 const k12TemplateId = "textbook-cn-k12";
@@ -279,13 +280,13 @@ function objectRowToCitation(db, row, constraints) {
     sourceUri: row.normalized_relative_path || "",
     pageNumber: row.source_page ?? row.node_page_start ?? null,
     excerpt: objectExcerpt(row),
-    contentType: row.object_type,
+    contentType: normalizeK12ObjectType(row.object_type) || row.object_type,
     structureNodeId: row.structure_node_id || "",
     metadata: safeMetadata({
       template: k12TemplateId,
-      contentType: row.object_type,
+      contentType: normalizeK12ObjectType(row.object_type) || row.object_type,
       objectId: row.object_id,
-      objectType: row.object_type,
+      objectType: normalizeK12ObjectType(row.object_type) || row.object_type,
       objectTitle: row.title || "",
       lessonTitle,
       lessonOrder,
@@ -306,7 +307,7 @@ function objectRelations(db, objectId) {
     ORDER BY relation_type ASC, relation_id ASC
   `).all(objectId, objectId).map((row) => ({
     id: row.relation_id || "",
-    type: row.relation_type || "",
+    type: normalizeK12RelationType(row.relation_type) || row.relation_type || "",
     direction: row.source_object_id === objectId ? "out" : "in",
     targetObjectId: row.source_object_id === objectId ? row.target_object_id : row.source_object_id,
     qualityState: row.quality_state || ""
@@ -386,8 +387,9 @@ function objectScore(citation, constraints = {}, terms = []) {
 function relationScore(relations = []) {
   let score = 0;
   for (const relation of relations) {
-    if (relation.type === "belongs_to_lesson") score += 12;
-    if (relation.type === "supports_exercise") score += 18;
+    const type = normalizeK12RelationType(relation.type) || relation.type;
+    if (type === "lesson_to_vocabulary") score += 12;
+    if (type === "formula_to_exercise") score += 18;
   }
   return score;
 }

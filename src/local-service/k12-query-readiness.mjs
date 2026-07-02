@@ -1,5 +1,6 @@
 import { k12TemplateId } from "../core/document-scope.mjs";
 import { currentKnowledgeBaseId, listKnowledgeBases } from "./knowledge-bases.mjs";
+import { normalizeK12ObjectType, normalizeK12RelationType } from "./k12-object-contract.mjs";
 import { nowIso, openCatalogDatabase, parseJson } from "./storage.mjs";
 
 export function readK12QueryReadinessFromCatalog(state, options = {}) {
@@ -62,8 +63,8 @@ function summarizeQueryReadiness({ activeDocuments, nodes, objects, relations, e
   const vocabulary = Number(byObjectType.vocabulary || 0);
   const formulas = Number(byObjectType.formula || 0);
   const exercises = Number(byObjectType.exercise || 0);
-  const belongsToLesson = Number(byRelationType.belongs_to_lesson || 0);
-  const supportsExercise = Number(byRelationType.supports_exercise || 0);
+  const lessonVocabularyRelations = Number(byRelationType.lesson_to_vocabulary || 0);
+  const formulaExerciseRelations = Number(byRelationType.formula_to_exercise || 0);
   const routes = {
     firstLessonLookup: tocAnchors > 0 ? "ready" : lessons > 0 ? "partial" : "blocked",
     unitLessonLookup: units > 0 && (tocAnchors > 0 || lessons > 0) ? "ready" : "blocked",
@@ -72,8 +73,8 @@ function summarizeQueryReadiness({ activeDocuments, nodes, objects, relations, e
     evaluationClosure: evaluation.status === "ready" ? "ready" : evaluation.results > 0 ? "partial" : "blocked"
   };
   const objectRoutes = {
-    vocabularyLookup: vocabulary > 0 && belongsToLesson > 0 ? "ready" : vocabulary > 0 ? "partial" : "blocked",
-    mathExerciseLookup: (formulas > 0 || exercises > 0) && supportsExercise > 0 ? "ready" : (formulas > 0 || exercises > 0) ? "partial" : "blocked"
+    vocabularyLookup: vocabulary > 0 && lessonVocabularyRelations > 0 ? "ready" : vocabulary > 0 ? "partial" : "blocked",
+    mathExerciseLookup: (formulas > 0 || exercises > 0) && formulaExerciseRelations > 0 ? "ready" : (formulas > 0 || exercises > 0) ? "partial" : "blocked"
   };
   const allStatuses = [...Object.values(routes), ...Object.values(objectRoutes)];
   return {
@@ -177,14 +178,14 @@ function nodeRow(row = {}) {
 function objectRow(row = {}) {
   return {
     objectId: String(row.object_id || ""),
-    objectType: String(row.object_type || ""),
+    objectType: normalizeK12ObjectType(row.object_type) || String(row.object_type || ""),
     qualityState: String(row.quality_state || "")
   };
 }
 
 function relationRow(row = {}) {
   return {
-    relationType: String(row.relation_type || ""),
+    relationType: normalizeK12RelationType(row.relation_type) || String(row.relation_type || ""),
     qualityState: String(row.quality_state || "")
   };
 }

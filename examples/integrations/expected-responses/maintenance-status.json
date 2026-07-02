@@ -1,0 +1,26 @@
+{
+  "contractVersion": "2026-07-query-runtime.1",
+  "ok": true,
+  "maintenance": {
+    "summary": {
+      "latestJobStatus": "completed",
+      "updateChannel": "manual"
+    },
+    "providerCapabilities": {
+      "kind": "knowmesh.providerCapabilities",
+      "dryRun": {
+        "summary": {
+          "externalCallsBeforeExecution": 0
+        }
+      }
+    },
+    "qualityIssues": {
+      "open": 0
+    },
+    "links": {
+      "feedback": "/kb/sample-general-docs/use/feedback",
+      "maintenanceReview": "/kb/sample-general-docs/maintain/review",
+      "providerDiagnostics": "/kb/sample-general-docs/maintain/diagnostics"
+    }
+  }
+}

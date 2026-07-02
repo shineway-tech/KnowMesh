@@ -28,6 +28,7 @@ test("general template is the fallback template for any knowledge base", () => {
   assert.equal(template.version, "1.2.0");
   assert.equal(template.templateRole, "fallback");
   assert.equal(template.extendsTemplate, null);
+  assert.equal(template.expertId, null);
   assert.equal(template.expertName, null);
   assert.equal(template.domainProcessingPolicy?.unitOfMeaning, "business-section");
   assert.equal(template.domainProcessingPolicy?.versionHandling, "active-version-with-history");
@@ -42,6 +43,7 @@ test("K12 template extends the fallback with textbook semantics", () => {
   assert.equal(template.version, "1.2.0");
   assert.equal(template.templateRole, "industry-extension");
   assert.equal(template.extendsTemplate, "general-docs");
+  assert.equal(template.expertId, "k12");
   assert.equal(template.expertName, "KnowMesh Expert · K12");
   assert.equal(template.domainProcessingPolicy?.unitOfMeaning, "teaching-unit");
   assert.equal(template.domainProcessingPolicy?.tocHandling, "chapter-structure");

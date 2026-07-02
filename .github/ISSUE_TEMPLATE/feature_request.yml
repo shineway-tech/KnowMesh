@@ -1,40 +1,40 @@
 name: Feature request
-description: Propose a KnowMesh capability or workflow improvement.
+description: Suggest a product, workflow, provider, or Expert improvement.
 title: "[Feature]: "
-labels:
-  - enhancement
+labels: ["enhancement"]
 body:
   - type: textarea
     id: problem
     attributes:
-      label: Problem
-      description: What user workflow or maintenance pain should this solve?
+      label: Problem or opportunity
+      description: What knowledge-asset reliability, traceability, maintainability, or integration problem would this solve?
     validations:
       required: true
   - type: textarea
     id: proposal
     attributes:
-      label: Proposal
-      description: Describe the desired behavior and user-facing outcome.
-    validations:
-      required: true
-  - type: textarea
-    id: data-model
-    attributes:
-      label: Data and safety impact
-      description: Note any effect on workspace.sqlite, catalog.sqlite, credentials, local files, cloud operations, or generated artifacts.
+      label: Proposed direction
+      description: Describe the desired behavior or workflow.
     validations:
       required: true
   - type: dropdown
-    id: area
+    id: layer
     attributes:
-      label: Area
+      label: Layer
       options:
         - Web Console
-        - KnowMesh Core
-        - KnowMesh Expert
-        - Provider Layer
-        - Platform / Launcher
+        - Knowledge Asset Layer
+        - Query Runtime
+        - Expert
+        - Provider
+        - Platform
         - Documentation
-    validations:
-      required: true
+  - type: textarea
+    id: safety
+    attributes:
+      label: Data, cost, or security boundary
+      description: Note whether this touches documents, credentials, cloud calls, generated artifacts, or release packages.
+  - type: textarea
+    id: alternatives
+    attributes:
+      label: Alternatives considered

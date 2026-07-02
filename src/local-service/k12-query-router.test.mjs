@@ -53,7 +53,7 @@ test("K12 query router uses domain objects for math formulas and exercises", () 
   assert.equal(result.status, "evidence_found");
   assert.equal(result.route.intent, "exercise_example_lookup");
   assert.deepEqual(result.citations.map((item) => item.metadata.objectType).sort(), ["exercise", "formula"]);
-  assert.ok(result.citations.some((item) => item.metadata.relations.some((relation) => relation.type === "supports_exercise")));
+  assert.ok(result.citations.some((item) => item.metadata.relations.some((relation) => relation.type === "formula_to_exercise")));
   assert.ok(result.citations.every((item) => item.metadata.subject === "数学"));
   assert.doesNotMatch(JSON.stringify(result), /private/);
 });
@@ -167,18 +167,18 @@ function writeK12QueryFixture(state, knowledgeBaseId) {
       });
       insertRelation(db, {
         id: "rel-vocab-jingqiao",
-        sourceId: "object-vocab-jingqiao",
-        targetId: "object-lesson-hunter",
-        type: "belongs_to_lesson",
+        sourceId: "object-lesson-hunter",
+        targetId: "object-vocab-jingqiao",
+        type: "lesson_to_vocabulary",
         documentId: "doc-chinese-g5-v1",
         nodeId: "lesson-chinese-u3-l1",
         now
       });
       insertRelation(db, {
         id: "rel-vocab-peihe",
-        sourceId: "object-vocab-peihe",
-        targetId: "object-lesson-hunter",
-        type: "belongs_to_lesson",
+        sourceId: "object-lesson-hunter",
+        targetId: "object-vocab-peihe",
+        type: "lesson_to_vocabulary",
         documentId: "doc-chinese-g5-v1",
         nodeId: "lesson-chinese-u3-l1",
         now
@@ -227,7 +227,7 @@ function writeK12QueryFixture(state, knowledgeBaseId) {
         id: "rel-formula-exercise",
         sourceId: "object-math-formula-area",
         targetId: "object-math-exercise-area",
-        type: "supports_exercise",
+        type: "formula_to_exercise",
         documentId: "doc-math-g5-v1",
         nodeId: "unit-math-5",
         now

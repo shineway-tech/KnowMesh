@@ -35,10 +35,19 @@ import { openKnownLocalPath, revealLocalFilePath } from "./local-paths.mjs";
 import { platformRuntimeInventory } from "./platform-runtime.mjs";
 import { previewExecutionPlan } from "./plan-preview.mjs";
 import { providerCapabilities } from "./provider-capabilities.mjs";
+import { providerDiagnostics } from "./provider-diagnostics.mjs";
+import { integrationDiagnostics } from "./integration-diagnostics.mjs";
+import { integrationManifest } from "./integration-manifest.mjs";
+import {
+  createPublicSampleKnowledgeBase,
+  listPublicSamples,
+  resetPublicSampleKnowledgeBase
+} from "./public-samples.mjs";
 import { buildExportPackagePreview, previewImportPackage } from "./package-manifest.mjs";
 import { previewTargetedRerun } from "./targeted-rerun.mjs";
 import { previewRetrievalStrategy } from "./retrieval-strategy.mjs";
 import { buildTemplateScan, previewScan } from "./scan-preview.mjs";
+import { searchCatalog } from "./catalog-search.mjs";
 import { renderConsolePage, resolveConsoleRoute } from "../web-console/pages.mjs";
 import {
   buildDocumentListPayload,
@@ -211,6 +220,16 @@ async function handleRequest(request, response, state) {
     return;
   }
 
+  if (pathname === "/api/integration/manifest" && request.method === "GET") {
+    sendJson(response, 200, integrationManifest(requestState, { scoped: Boolean(scope.basePath) }));
+    return;
+  }
+
+  if (pathname === "/api/integration/diagnostics" && request.method === "GET") {
+    sendJson(response, 200, integrationDiagnostics(requestState, { scoped: Boolean(scope.basePath) }));
+    return;
+  }
+
   if (pathname === "/api/knowledge-bases" && request.method === "GET") {
     sendJson(response, 200, listKnowledgeBases(requestState));
     return;
@@ -227,6 +246,34 @@ async function handleRequest(request, response, state) {
     const body = await readJsonBody(request);
     const current = switchKnowledgeBase(state, body.id || body.knowledgeBaseId || "");
     sendJson(response, 200, { ok: true, current, ...listKnowledgeBases(state) });
+    return;
+  }
+
+  if (pathname === "/api/public-samples" && request.method === "GET") {
+    sendJson(response, 200, listPublicSamples(requestState));
+    return;
+  }
+
+  if (pathname === "/api/public-samples/create" && request.method === "POST") {
+    const body = await readJsonBody(request);
+    try {
+      sendJson(response, 200, createPublicSampleKnowledgeBase(state, body || {}));
+    } catch (error) {
+      sendJson(response, error.status || 500, {
+        ok: false,
+        error: {
+          code: error.code || "public_sample_create_failed",
+          message: error instanceof Error ? error.message : String(error)
+        }
+      });
+    }
+    return;
+  }
+
+  if (pathname === "/api/public-samples/reset" && request.method === "POST") {
+    const body = await readJsonBody(request);
+    const result = resetPublicSampleKnowledgeBase(state, body || {});
+    sendJson(response, result.ok ? 200 : result.status || 409, result);
     return;
   }
 
@@ -351,6 +398,13 @@ async function handleRequest(request, response, state) {
       cursor: requestUrl.searchParams.get("cursor") || "0",
       limit: requestUrl.searchParams.get("limit") || "20"
     }));
+    return;
+  }
+
+  if (pathname === "/api/search" && (request.method === "GET" || request.method === "POST")) {
+    const body = request.method === "POST" ? await readJsonBody(request) : {};
+    const result = searchCatalog(requestState, catalogSearchInputFromRequest(requestUrl, body || {}));
+    sendJson(response, result.ok ? 200 : 409, result);
     return;
   }
 
@@ -817,6 +871,10 @@ async function handleRequest(request, response, state) {
   if (pathname === "/api/maintenance/review" && request.method === "GET") {
     sendJson(response, 200, maintenanceReview(requestState, {
       status: requestUrl.searchParams.get("status") || "open",
+      issueType: requestUrl.searchParams.get("issueType") || requestUrl.searchParams.get("type") || "",
+      severity: requestUrl.searchParams.get("severity") || "",
+      document: requestUrl.searchParams.get("document") || requestUrl.searchParams.get("query") || "",
+      page: requestUrl.searchParams.get("page") || "",
       limit: requestUrl.searchParams.get("limit") || "20"
     }));
     return;
@@ -846,14 +904,14 @@ async function handleRequest(request, response, state) {
   if (pathname === "/api/versions/rollback/preview" && request.method === "POST") {
     const body = await readJsonBody(request);
     const result = previewKnowledgeBaseRollback(requestState, body || {});
-    sendJson(response, result.ok ? 200 : 404, result);
+    sendJson(response, result.ok ? 200 : versionStatusCode(result), result);
     return;
   }
 
   if (pathname === "/api/versions/rollback" && request.method === "POST") {
     const body = await readJsonBody(request);
     const result = rollbackKnowledgeBaseVersion(requestState, body || {});
-    const status = result.ok ? 200 : result.error?.code === "CONFIRMATION_REQUIRED" ? 409 : 404;
+    const status = result.ok ? 200 : result.error?.code === "CONFIRMATION_REQUIRED" ? 409 : versionStatusCode(result);
     sendJson(response, status, result);
     return;
   }
@@ -875,6 +933,11 @@ async function handleRequest(request, response, state) {
 
   if (pathname === "/api/providers/capabilities" && request.method === "GET") {
     sendJson(response, 200, providerCapabilities(requestState));
+    return;
+  }
+
+  if (pathname === "/api/providers/diagnostics" && request.method === "GET") {
+    sendJson(response, 200, providerDiagnostics(requestState));
     return;
   }
 
@@ -1045,6 +1108,38 @@ function documentListOptionsFromSearch(searchParams) {
   };
 }
 
+function catalogSearchInputFromRequest(requestUrl, body = {}) {
+  const params = requestUrl.searchParams;
+  const fromSearch = {
+    query: params.get("query") || params.get("q") || "",
+    purpose: params.get("purpose") || "",
+    includeReview: params.get("includeReview") || params.get("include_review") || undefined,
+    documentId: params.get("documentId") || params.get("document_id") || "",
+    sourceType: params.get("sourceType") || params.get("source_type") || "",
+    structureNodeId: params.get("structureNodeId") || params.get("structure_node_id") || "",
+    pageStart: params.get("pageStart") || params.get("page_start") || "",
+    pageEnd: params.get("pageEnd") || params.get("page_end") || "",
+    limit: params.get("limit") || "",
+    offset: params.get("offset") || "",
+    qualityStates: [
+      ...splitSearchValues(params.getAll("qualityState")),
+      ...splitSearchValues(params.getAll("qualityStates"))
+    ]
+  };
+  const merged = { ...fromSearch, ...(body || {}) };
+  if (!("qualityStates" in (body || {})) && !("qualityState" in (body || {})) && !fromSearch.qualityStates.length) {
+    delete merged.qualityStates;
+  }
+  return merged;
+}
+
+function splitSearchValues(values = []) {
+  return values
+    .flatMap((value) => String(value || "").split(","))
+    .map((value) => value.trim())
+    .filter(Boolean);
+}
+
 function revealKnowledgeBaseDocument(requestState, input = {}) {
   const draft = readSetupState(requestState).draft || {};
   const sourceRoot = String(draft["project.source"] || "").trim();
@@ -1125,6 +1220,7 @@ function requiresKnowledgeBaseApi(pathname) {
     || pathname.startsWith("/api/structure")
     || pathname.startsWith("/api/chunks")
     || pathname.startsWith("/api/index")
+    || pathname === "/api/search"
     || pathname === "/api/version/manifest"
     || pathname.startsWith("/api/evaluation")
     || pathname.startsWith("/api/k12")
@@ -1187,6 +1283,7 @@ function buildConsoleService(state, request, scope) {
     apiBasePath: basePath ? `${basePath}/api` : "/api",
     setupState: basePath ? readSetupState(state) : emptySetupState(state),
     knowledgeBases,
+    publicSamples: listPublicSamples(state),
     defaultProjectFolders: state.defaultProjectFolders,
     credentialLocations: credentialLocations(state),
     modelProviderLocations: modelProviderLocations(state),
@@ -1360,7 +1457,7 @@ function buildMaintenanceDiagnosticExport(state) {
       summary: publicJobSummary(latest.job.summary)
     } : null
   };
-  if (!current) return baseDiagnostics;
+  if (!current) return redactMaintenanceDiagnostics(baseDiagnostics, state);
 
   const sourceManifest = readSourceManifestFromCatalog(state);
   const extractionManifest = readExtractionManifestFromCatalog(state);
@@ -1378,7 +1475,7 @@ function buildMaintenanceDiagnosticExport(state) {
   const feedback = queryFeedbackSummary(state, { limit: 0 });
   const queryContract = queryRuntimeContract(state);
 
-  return {
+  return redactMaintenanceDiagnostics({
     ...baseDiagnostics,
     sourceManifest: {
       ok: sourceManifest.ok,
@@ -1495,16 +1592,13 @@ function buildMaintenanceDiagnosticExport(state) {
       byAction: feedback.feedback?.byAction || {},
       openByAction: feedback.feedback?.openByAction || {}
     }
-  };
+  }, state);
 }
 
 function publicJobSummary(summary = {}) {
   const allowedKeys = [
     "knowledgeBaseId",
     "datasetVersionId",
-    "sourceRoot",
-    "workspaceRoot",
-    "baseWorkspaceRoot",
     "includedFiles",
     "excludedFiles",
     "logicalDocuments",
@@ -1517,8 +1611,7 @@ function publicJobSummary(summary = {}) {
     "reviewRequired",
     "artifactCount",
     "buildId",
-    "releaseId",
-    "activeManifestPath"
+    "releaseId"
   ];
   const result = {};
   for (const key of allowedKeys) {
@@ -1528,6 +1621,63 @@ function publicJobSummary(summary = {}) {
     }
   }
   return result;
+}
+
+function redactMaintenanceDiagnostics(value, state = {}) {
+  return redactDiagnosticValue(value, "", diagnosticRedactionRoots(state));
+}
+
+function redactDiagnosticValue(value, key = "", roots = []) {
+  if (Array.isArray(value)) return value.map((item) => redactDiagnosticValue(item, key, roots));
+  if (!value || typeof value !== "object") {
+    return typeof value === "string" ? redactDiagnosticString(value, key, roots) : value;
+  }
+  return Object.fromEntries(
+    Object.entries(value).map(([entryKey, entryValue]) => [
+      entryKey,
+      redactDiagnosticValue(entryValue, entryKey, roots)
+    ])
+  );
+}
+
+function redactDiagnosticString(value, key = "", roots = []) {
+  if (/access[_-]?key|secret|token|api[_-]?key|credential/i.test(key)) return "[redacted-secret]";
+  const text = String(value || "");
+  if (containsDiagnosticRoot(text, roots) || /[A-Za-z]:[\\/]/.test(text) || /(^|[^\w/])\/(?:Users|home)\//.test(text) || /(^|[^\\])\\Users\\/i.test(text)) {
+    return "[redacted-local-path]";
+  }
+  return text;
+}
+
+function diagnosticRedactionRoots(state = {}) {
+  const candidates = [
+    state.projectRoot,
+    state.userDataRoot,
+    state.runtimeRoot,
+    process.env.KNOWMESH_RUNTIME_DIR
+  ];
+  const roots = [];
+  for (const candidate of candidates) {
+    if (typeof candidate !== "string" || !candidate.trim()) continue;
+    roots.push(path.resolve(candidate));
+  }
+  return [...new Set(roots.map(normalizeDiagnosticPathText).filter((item) => item.length >= 4))];
+}
+
+function containsDiagnosticRoot(value, roots = []) {
+  const text = normalizeDiagnosticPathText(value);
+  return roots.some((root) => root && text.includes(root));
+}
+
+function normalizeDiagnosticPathText(value) {
+  return String(value || "").replaceAll("\\", "/").replace(/\/+/g, "/").replace(/\/$/, "");
+}
+
+function versionStatusCode(result = {}) {
+  if (result.error?.code === "TARGET_RELEASE_NOT_ACTIVATABLE") return 409;
+  if (result.error?.code === "TARGET_ALREADY_ACTIVE") return 409;
+  if (result.error?.code === "TARGET_RELEASE_REQUIRED") return 409;
+  return 404;
 }
 
 async function readJsonBody(request) {

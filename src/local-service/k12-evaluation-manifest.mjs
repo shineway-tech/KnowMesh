@@ -2,6 +2,13 @@ import { k12TemplateId } from "../core/document-scope.mjs";
 import { currentKnowledgeBaseId, listKnowledgeBases } from "./knowledge-bases.mjs";
 import { nowIso, openCatalogDatabase, parseJson } from "./storage.mjs";
 
+const qualityTargets = {
+  evaluationCoverageRate: 1,
+  outOfScopeRefusalRate: 1,
+  tocLookupPassRate: 0.95,
+  citationBearingUsableAnswerRate: 0.85
+};
+
 export function readK12EvaluationManifestFromCatalog(state, options = {}) {
   const registry = listKnowledgeBases(state);
   const knowledgeBaseId = String(options.knowledgeBaseId || currentKnowledgeBaseId(state) || "").trim();
@@ -127,30 +134,51 @@ function summarizeEvaluation(cases, latestResults, activeBuild) {
   const coveragePercent = caseCount ? Math.round((resultCount / caseCount) * 100) : 0;
   const usableAnswerRate = caseCount ? Math.round((passed / caseCount) * 100) : 0;
   const citationBearingUsableRate = caseCount ? Math.round((citationBearingPassed / caseCount) * 100) : 0;
+  const categoryRates = summarizeCategoryRates(categories);
+  const outOfScopeRefusalRate = categoryRates.out_of_scope_refusal?.passRate || 0;
+  const tocLookupPassRate = categoryRates.toc_lookup?.passRate || 0;
   const requiredGates = {
-    evaluationCoverage: caseCount > 0 && resultCount >= caseCount ? "pass" : "fail",
-    outOfScopeRefusal: categoryPass(categories.out_of_scope_refusal),
-    tocLookup: categoryPass(categories.toc_lookup),
-    citationBearingUsableAnswers: citationBearingUsableRate >= 85 ? "pass" : "review"
+    evaluationCoverage: caseCount > 0 && resultCount / caseCount >= qualityTargets.evaluationCoverageRate ? "pass" : "fail",
+    outOfScopeRefusal: outOfScopeRefusalRate >= qualityTargets.outOfScopeRefusalRate ? "pass" : "fail",
+    tocLookup: tocLookupPassRate >= qualityTargets.tocLookupPassRate ? "pass" : "fail",
+    citationBearingUsableAnswers: citationBearingUsableRate / 100 >= qualityTargets.citationBearingUsableAnswerRate ? "pass" : "review"
   };
   return {
     activeBuildId: activeBuild?.buildId || "",
     cases: caseCount,
     results: resultCount,
     coveragePercent,
+    qualityTargets,
     passed,
     failed,
     review,
     usableAnswerRate,
     citationBearingUsableRate,
     categories,
+    categoryRates,
+    outOfScopeRefusalRate,
+    tocLookupPassRate,
     requiredGates
   };
 }
 
-function categoryPass(bucket) {
-  if (!bucket || bucket.cases === 0 || bucket.missing > 0) return "fail";
-  return bucket.failed === 0 ? "pass" : "fail";
+function summarizeCategoryRates(categories = {}) {
+  const rates = {};
+  for (const [category, bucket] of Object.entries(categories)) {
+    rates[category] = {
+      cases: bucket.cases,
+      results: bucket.results,
+      passed: bucket.passed,
+      failed: bucket.failed,
+      missing: bucket.missing,
+      passRate: bucket.cases ? roundRate(bucket.passed / bucket.cases) : 0
+    };
+  }
+  return rates;
+}
+
+function roundRate(value) {
+  return Math.round(Number(value || 0) * 10000) / 10000;
 }
 
 function buildRisks(summary) {
@@ -239,12 +267,16 @@ function emptySummary(status) {
     cases: 0,
     results: 0,
     coveragePercent: 0,
+    qualityTargets,
     passed: 0,
     failed: 0,
     review: 0,
     usableAnswerRate: 0,
     citationBearingUsableRate: 0,
     categories: {},
+    categoryRates: {},
+    outOfScopeRefusalRate: 0,
+    tocLookupPassRate: 0,
     requiredGates: {
       evaluationCoverage: "fail",
       outOfScopeRefusal: "fail",

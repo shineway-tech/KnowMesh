@@ -2,11 +2,11 @@
 
 # KnowMesh
 
-**Compile real document folders into auditable, traceable, maintainable knowledge assets.**
+**Knowledge Asset Compiler for real document folders: auditable, traceable, and maintainable.**
 
 Local-first knowledge asset compiler for auditable RAG, traceable citations, and maintainable document intelligence.
 
-[中文](README.md) · [Documentation](docs/README.en.md) · [Current Design](docs/current-design.md) · [Getting Started](docs/getting-started.en.md) · [Architecture](docs/architecture.en.md)
+[中文](README.md) · [Documentation](docs/README.en.md) · [Current Design](docs/current-design.md) · [Getting Started](docs/getting-started.en.md) · [Architecture](docs/architecture.en.md) · [K12 Expert](docs/experts/k12.en.md) · [Query Runtime API](docs/api/query-runtime.en.md)
 
 [![CI](https://github.com/shineway-tech/KnowMesh/actions/workflows/ci.yml/badge.svg)](https://github.com/shineway-tech/KnowMesh/actions/workflows/ci.yml)
 [![CodeQL](https://github.com/shineway-tech/KnowMesh/actions/workflows/codeql.yml/badge.svg)](https://github.com/shineway-tech/KnowMesh/actions/workflows/codeql.yml)
@@ -20,6 +20,12 @@ Local-first knowledge asset compiler for auditable RAG, traceable citations, and
 ![KnowMesh hero](assets/readme/hero.svg)
 
 </div>
+
+> **Public Launch Candidate**
+>
+> KnowMesh is still `0.1.0-alpha`, but the repository is being tightened to public launch-candidate standards: README, public samples, issue/PR templates, Security, OpenAPI, release gate, CI, CodeQL, Scorecard, and artifact checksums must be reviewable by outside contributors. The social preview lives at `assets/social/knowmesh-social-preview.png`.
+>
+> Before Public Beta, the first-run path, browser sample flow, Integration Examples contract, Expert / Provider lifecycle, and release evidence are treated as hard gates. Extension stages are labeled `official` -> `certified` -> `community` -> `experimental` so contributors do not confuse experimental entry points with stable APIs.
 
 KnowMesh is not a "upload files and ask a model" RAG demo, and it is not another vector database UI. It treats source folders as long-lived knowledge assets: pages, blocks, structures, chunks, citations, quality states, versions, and Query Runtime contracts that can be inspected, maintained, rolled back, and integrated.
 
@@ -97,6 +103,16 @@ npm run demo:plan
 
 KnowMesh starts a local service at `http://127.0.0.1:7457` by default. Local smoke and demo checks do not upload files, call OCR, call embedding, or write vector indexes.
 
+## Public Samples
+
+Start with [examples/public-samples](examples/public-samples/README.md) to understand the real product boundary:
+
+- `general-docs`: a fictional operations handbook for Query Runtime, citations, no-answer behavior, feedback, package preview, and version manifest checks.
+- `operations-handbook`: a non-K12 Expert SDK sample for policies, procedures, review cadence, rollback rules, and evidence requirements.
+- `k12-synthetic`: invented Grade 5 math material for the K12 Expert path without bundling textbook content.
+
+These samples are credential-free. They perform no upload, no OCR call, no embedding call, no vector write, and no cloud resource creation.
+
 ## First Expert Scenario: K12 Textbook Knowledge Bases
 
 K12 is not the whole product identity. It is the first scenario that proves the Expert model. Textbooks are not generic PDFs: they have table-of-contents structure, units, lessons, vocabulary, formulas, exercises, page anchors, and strict scope boundaries.
@@ -124,8 +140,32 @@ Implemented foundation:
 - Multi-knowledge-base isolation and scoped routes.
 - Task checkpoints, logs, pause, retry, and recovery.
 - Query Runtime shared by console testing and integration APIs.
+- Expert registry, K12 schema, object/relation contract, and 95% TOC / 100% refusal gates.
 - Document maintenance, feedback review, version records, and diagnostics export.
 - Release smoke, artifact install smoke, and package boundary gates.
+- `0.5.0 Provider Adapters` release evidence: provider manifests, parser/OCR
+  boundary, embedding/vector boundary, provider diagnostics browser proof,
+  no-cloud public path, and package asset review.
+- `0.6.0 Integration SDK` release evidence: endpointManifestReadiness,
+  sdkClientProof, examplesDriftProof, integrationSafetyProof,
+  providerAwareNoCloudProof, and integrationPackageAssetReview.
+- `0.7.0 Consumer Integration Proof` release evidence:
+  installedSdkConsumerProof, livePublicSampleSdkProof,
+  integrationRecipeProof, privacyBoundaryAuditProof,
+  providerAwareNoCloudConsumerProof, and consumerPackageAssetReview.
+- `0.8.0 Operator Workflow Proof` release evidence:
+  sourceIntakeProof, executionRecoveryProof, maintenanceTargetedRerunProof,
+  versionRollbackProof, operatorBrowserWorkflow, operatorPrivacyAuditProof,
+  and operatorPackageAssetReview.
+- `0.9.0 First-Run Usability Proof` release evidence:
+  firstRunLaunchProof, guidedSetupProof, buildRecoveryProof,
+  firstQuestionProof, maintenanceNextActionProof, firstRunBrowserWorkflow,
+  and firstRunPackageAssetReview.
+- `1.0.0 Usable Product Proof` release evidence:
+  usableLaunchReliabilityProof, usableDocumentIntakeProof,
+  usableWebConsoleWorkflowProof, usableDurableDataPackageProof,
+  usableBrowserWorkflow, usablePrivacyProof, and
+  usableProductPackageAssetReview.
 - Windows / Ubuntu CI on Node.js 24.
 - CodeQL, OpenSSF Scorecard, secret scanning, push protection, and private vulnerability reporting.
 - `main` branch protection requires Ubuntu / Windows CI, PR review, and resolved conversations.
@@ -135,7 +175,7 @@ Near-term priorities:
 - Stronger Query Runtime usability.
 - Expert plugin boundaries and authoring documentation.
 - Better local parser / OCR provider adapters.
-- OpenAPI-ready integration contract.
+- Deeper downstream framework adapters and real application integration feedback.
 
 See [ROADMAP.en.md](ROADMAP.en.md) for the fuller roadmap.
 
@@ -153,8 +193,14 @@ See [ROADMAP.en.md](ROADMAP.en.md) for the fuller roadmap.
 ```bash
 npm test
 npm run smoke:release
+npm run smoke:usable-product
+npm run smoke:first-run-usability
+npm run smoke:operator-workflow
+npm run smoke:sdk-consumer
+npm run smoke:live-sdk
 npm run smoke:artifact
 npm run verify:package-boundary
+npm run verify:integration-privacy
 npm run doctor
 npm run demo:plan
 ```
@@ -168,12 +214,14 @@ assets/social/            Repository social preview assets
 configs/                  Reusable configuration templates
 docs/                     Documentation and current design authority
 examples/local-demo/      Credential-free local example
+examples/public-samples/  Public launch-candidate samples
 examples/textbook-cn-k12/ K12 Aliyun example config
 launcher/                 Node-independent user launchers
 schemas/                  JSON schemas
 scripts/                  Release and package verification scripts
 src/cli/                  Local command entry
 src/core/                 Core planning and template logic
+src/experts/              Expert templates and schemas
 src/local-service/        Local HTTP service and APIs
 src/web-console/          Local Web Console
 ```
@@ -183,11 +231,24 @@ src/web-console/          Local Web Console
 - [Documentation Center](docs/README.en.md)
 - [Getting Started](docs/getting-started.en.md)
 - [Architecture Overview](docs/architecture.en.md)
+- [K12 Expert](docs/experts/k12.en.md)
+- [Expert Authoring Kit](docs/experts/authoring.en.md)
+- [Query Runtime API](docs/api/query-runtime.en.md)
+- [Operator Workflow Proof](docs/operator-workflow.en.md)
+- [First-Run Usability Proof](docs/first-run-usability.en.md)
+- [Usable Product Proof](docs/usable-product.en.md)
+- [Integration Guide](docs/integrations.en.md)
+- [Integration Examples](examples/integrations/README.md)
+- [Provider Adapters](docs/providers.en.md)
+- [Community Backlog](docs/community-backlog.en.md)
+- [Release Operations](docs/release-operations.en.md)
 - [Roadmap](ROADMAP.en.md)
 - [Project Map](docs/project-map.en.md)
 - [Good First Issues](docs/good-first-issues.en.md)
 - [Current Design](docs/current-design.md)
 - [Operations Runbook](docs/phase1-6-operations-runbook.md)
+- [Public Samples](examples/public-samples/README.md)
+- [Release Candidate Evidence](docs/release-candidate.en.md)
 - [Changelog](CHANGELOG.md)
 - [Contributing](CONTRIBUTING.md)
 - [Security Policy](SECURITY.md)
@@ -199,6 +260,10 @@ src/web-console/          Local Web Console
 You are welcome to follow the project, try it locally, open issues, improve docs, discuss Expert scenarios, or work on provider adapters. Please read [CONTRIBUTING.md](CONTRIBUTING.md) first.
 
 Report security issues privately through [SECURITY.md](SECURITY.md). Do not put vulnerability details, secrets, document text, logs, or local paths in public issues.
+
+## Repository Topics
+
+Recommended GitHub topics: `knowledge-base`, `rag`, `retrieval-augmented-generation`, `local-first`, `document-ai`, `document-intelligence`, `sqlite`, `sqlite-first`, `vector-search`, `citations`, `auditable-ai`, `knowledge-graph`, `education`, `k12`, `textbook`, `aliyun`, `dashscope`, `nodejs`, `web-console`, `open-source`.
 
 ## License
 

@@ -1,0 +1,16 @@
+{
+  "contractVersion": "2026-07-query-runtime.1",
+  "kind": "knowmesh.queryResult",
+  "ok": false,
+  "status": "insufficient_evidence",
+  "answer": {
+    "message": "KnowMesh found no reliable evidence for this question."
+  },
+  "citations": [],
+  "checks": [
+    { "key": "evidenceFound", "status": "blocked" }
+  ],
+  "maintenance": [
+    { "key": "addSources", "status": "suggested" }
+  ]
+}

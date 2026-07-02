@@ -7,6 +7,8 @@ import { currentKnowledgeBaseId } from "./knowledge-bases.mjs";
 import { readMetadataContractUpgradeState, upgradeAliyunMetadataContract } from "./local-executor.mjs";
 import { platformRuntimeInventory } from "./platform-runtime.mjs";
 import { providerCapabilities } from "./provider-capabilities.mjs";
+import { providerDiagnostics } from "./provider-diagnostics.mjs";
+import { publicSampleOwnershipSummary } from "./public-samples.mjs";
 import { openCatalogDatabase } from "./storage.mjs";
 
 const metadataContractUpgradeRuns = new Map();
@@ -21,6 +23,9 @@ export function maintenanceStatus(state) {
   const qualityIssues = readQualityIssueSummary(state);
   const platformRuntime = platformRuntimeInventory(state);
   const providers = providerCapabilities(state);
+  const providerDiagnosticSummary = providerDiagnostics(state, { capabilities: providers });
+  const providerCapabilitySummary = publicProviderCapabilitySummary(providers);
+  const sampleOwnership = publicSampleOwnershipSummary(state);
   const diagnostics = buildDiagnostics(endpoint, version, jobStatus, updateChannel, latest.job, metadataContract, qualityIssues, platformRuntime, providers);
   const updateGate = buildUpdateGate(updateChannel);
   const checks = [
@@ -69,12 +74,33 @@ export function maintenanceStatus(state) {
       },
       qualityIssues,
       platformRuntime,
-      providerCapabilities: providers,
+      providerCapabilities: providerCapabilitySummary,
+      providerDiagnostics: providerDiagnosticSummary,
+      sampleOwnership,
       templateContract: buildTemplateContractSummary(latest.job),
       diagnostics,
       updateGate,
       ...(metadataContract?.progress ? { metadataContractProgress: metadataContract.progress } : {})
     }
+  };
+}
+
+function publicProviderCapabilitySummary(providers = {}) {
+  return {
+    ok: providers.ok === true,
+    kind: providers.kind || "knowmesh.providerCapabilities",
+    apiVersion: providers.apiVersion || "1.0.0",
+    generatedAt: providers.generatedAt || new Date().toISOString(),
+    phase: providers.phase || "",
+    summary: providers.summary || {},
+    providers: providers.providers || [],
+    capabilities: providers.capabilities || [],
+    costPrivacyCards: providers.costPrivacyCards || [],
+    guidedActions: providers.guidedActions || [],
+    adapterContracts: providers.adapterContracts || [],
+    providerAdapterManifestSummary: providers.providerAdapterManifestSummary || null,
+    dryRun: providers.dryRun || null,
+    sensitiveDataPolicy: providers.sensitiveDataPolicy || null
   };
 }
 

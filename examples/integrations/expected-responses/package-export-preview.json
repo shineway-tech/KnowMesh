@@ -1,0 +1,15 @@
+{
+  "contractVersion": "2026-07-query-runtime.1",
+  "kind": "knowmesh.packageExportPreview",
+  "ok": true,
+  "packageManifest": {
+    "kind": "knowmesh.packageManifest",
+    "knowledgeBaseId": "sample-general-docs"
+  },
+  "exportPlan": {
+    "resetSafety": {
+      "sampleOwnedOnly": true,
+      "removesNormalKnowledgeBases": false
+    }
+  }
+}

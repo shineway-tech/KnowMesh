@@ -25,13 +25,14 @@ test("K12 Chinese extractor writes vocabulary objects and lesson relations witho
   const db = new Database(catalogDatabasePath(state, kb.id), { readonly: true });
   try {
     const objects = db.prepare("SELECT object_id, object_type, title, structure_node_id, metadata_json FROM knowledge_objects WHERE object_type = 'vocabulary' ORDER BY title ASC").all();
-    const relations = db.prepare("SELECT relation_type, source_object_id, target_object_id FROM object_relations ORDER BY source_object_id ASC").all();
+    const relations = db.prepare("SELECT relation_type, source_object_id, target_object_id FROM object_relations ORDER BY target_object_id ASC").all();
     const metadata = JSON.parse(objects[0].metadata_json);
 
     assert.deepEqual(objects.map((object) => object.title), ["精巧", "配合"]);
     assert.ok(objects.every((object) => object.structure_node_id === "lesson-1"));
-    assert.deepEqual(relations.map((relation) => relation.relation_type), ["belongs_to_lesson", "belongs_to_lesson"]);
-    assert.ok(relations.every((relation) => relation.target_object_id === "object-lesson-1"));
+    assert.deepEqual(relations.map((relation) => relation.relation_type), ["lesson_to_vocabulary", "lesson_to_vocabulary"]);
+    assert.ok(relations.every((relation) => relation.source_object_id === "object-lesson-1"));
+    assert.deepEqual(relations.map((relation) => relation.target_object_id), ["k12-vocabulary:block-vocab:1", "k12-vocabulary:block-vocab:2"]);
     assert.equal(metadata.sourceBlockId, "block-vocab");
     assert.equal(metadata.text, undefined);
     assert.doesNotMatch(JSON.stringify(metadata), /private vocabulary text/);

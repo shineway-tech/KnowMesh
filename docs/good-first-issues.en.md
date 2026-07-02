@@ -13,6 +13,9 @@ KnowMesh starter tasks should be small, clear, verifiable, and safe. They should
 | `area:tests` | Adding tests for existing APIs, migrations, task recovery, launchers | Related `node --test ...` or `npm test` |
 | `area:web-console` | Copy, empty states, labels, credential-free demo clarity | Local page remains understandable, API behavior unchanged |
 | `area:provider` | Provider capability notes, error wording, credential-free matrix | No real secrets, no cloud calls |
+| `area:expert` | Expert manifests, schemas, authoring docs, and small synthetic fixtures | No Core domain creep; manifest tests first |
+| `area:integration` | HTTP examples, OpenAPI docs, Query Runtime SDK examples | API-first, no internal SQLite reads |
+| `sample request` | Request a new public sample or synthetic scenario | No private data; explain public boundary |
 | `area:expert-k12` | K12 structure notes, evaluation sample format, query router docs | No textbook text, no domain logic pushed into Core |
 
 ## Starter Issue Template
@@ -24,6 +27,12 @@ A good starter issue should include:
 - Non-scope: no cloud integration, no real textbooks, no design authority rewrite.
 - Acceptance: commands such as `npm run verify:package-boundary` or a specific `node --test`.
 - Safety: do not commit `.env`, SQLite, workspace state, private documents, logs, or local paths.
+
+## First Contributor Path
+
+- docs-only: update README, docs, examples, or public sample guidance, keep Chinese and English in sync, then verify with `git diff --check` and the matching docs tests.
+- code-path: use only public APIs, public samples, and focused tests; do not read internal SQLite or introduce JSON-first runtime state.
+- public API: integrations and examples should use Query Runtime, integration endpoints, or the SDK instead of treating `workspace.sqlite` or `catalog.sqlite` as external APIs.
 
 ## First Suggested Tasks
 
@@ -89,6 +98,21 @@ Acceptance:
 
 - The targeted `node --test ...` command passes.
 - `npm test` passes if the change touches shared behavior.
+
+### 5. Add an integration example note
+
+Labels: `good first issue`, `area:integration`, `help wanted`
+
+Scope:
+
+- Improve `examples/integrations/` wording or expected responses.
+- Keep examples API-first.
+- Do not read internal SQLite or introduce private data.
+
+Acceptance:
+
+- `npm test -- scripts/integration-examples.test.mjs`
+- `git diff --check`
 
 ## Not Good First Issues
 

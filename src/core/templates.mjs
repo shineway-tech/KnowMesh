@@ -139,6 +139,7 @@ const templates = [
     templateRole: "industry-extension",
     extendsTemplate: "general-docs",
     coreName: "KnowMesh Core",
+    expertId: "k12",
     expertName: "KnowMesh Expert · K12",
     ...commonTemplateProcessingPolicy,
     title: {
@@ -455,6 +456,7 @@ const templates = [
     templateRole: "fallback",
     extendsTemplate: null,
     coreName: "KnowMesh Core",
+    expertId: null,
     expertName: null,
     ...commonTemplateProcessingPolicy,
     title: {
@@ -703,6 +705,7 @@ export function summarizeTemplate(template) {
     templateRole: template.templateRole,
     extendsTemplate: template.extendsTemplate,
     coreName: template.coreName,
+    expertId: template.expertId ?? null,
     expertName: template.expertName,
     title: template.title,
     shortTitle: template.shortTitle,

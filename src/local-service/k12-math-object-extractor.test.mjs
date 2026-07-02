@@ -26,12 +26,12 @@ test("K12 math extractor writes formula exercise objects and support relations w
   const db = new Database(catalogDatabasePath(state, kb.id), { readonly: true });
   try {
     const objects = db.prepare("SELECT object_type, title, metadata_json FROM knowledge_objects WHERE object_id LIKE 'k12-math:%' ORDER BY object_type ASC").all();
-    const relation = db.prepare("SELECT relation_type, source_object_id, target_object_id, metadata_json FROM object_relations WHERE relation_type = 'supports_exercise'").get();
+    const relation = db.prepare("SELECT relation_type, source_object_id, target_object_id, metadata_json FROM object_relations WHERE relation_type = 'formula_to_exercise'").get();
     const metadata = JSON.parse(objects[0].metadata_json);
 
     assert.deepEqual(objects.map((object) => object.object_type).sort(), ["exercise", "formula"]);
     assert.ok(objects.some((object) => object.title.includes("S = a")));
-    assert.equal(relation.relation_type, "supports_exercise");
+    assert.equal(relation.relation_type, "formula_to_exercise");
     assert.match(relation.source_object_id, /formula/);
     assert.match(relation.target_object_id, /exercise/);
     assert.equal(metadata.text, undefined);

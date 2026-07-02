@@ -13,12 +13,16 @@ export function syncCleanArtifactsToCatalog(state, clean = {}, context = {}) {
   const normalizedByDocument = new Map((clean.normalized || []).map((document) => [document.document_id, document]));
   const chunks = Array.isArray(clean.chunks) ? clean.chunks : [];
   const qualityByDocument = cleanQualityByDocument(chunks);
-  const pages = [...normalizedByDocument.values()].map((document) => cleanDocumentPage(document, {
+  const basePages = [...normalizedByDocument.values()].map((document) => cleanDocumentPage(document, {
     ...context,
     qualityState: qualityByDocument.get(document.document_id) || "primary"
   }));
   const blocks = chunks.map((chunk, index) => cleanChunkBlock(chunk, normalizedByDocument.get(chunk.document_id), index, context)).filter(Boolean);
   const chunkRows = chunks.map((chunk) => cleanChunkRow(chunk, normalizedByDocument.get(chunk.document_id), context)).filter(Boolean);
+  const pages = uniquePages([
+    ...basePages,
+    ...chunkRows.map((chunk) => cleanChunkPage(chunk, normalizedByDocument.get(chunk.documentId), context)).filter(Boolean)
+  ]);
   const citations = chunkRows.map((chunk) => citationForChunk(chunk)).filter(Boolean);
   return writeContentRows(state, knowledgeBaseId, { pages, blocks, chunks: chunkRows, citations });
 }
@@ -462,6 +466,37 @@ function cleanDocumentPage(document = {}, context = {}) {
   };
 }
 
+function cleanChunkPage(chunk = {}, document = {}, context = {}) {
+  if (!chunk.pageId || !chunk.documentId) return null;
+  const pageNumber = Number(chunk.pageNumber || chunk.metadata?.page_start || 1) || 1;
+  const title = chunk.metadata?.title || document?.title || chunk.documentId;
+  const relativePath = normalizeRelativePath(chunk.metadata?.relativePath || document?.relativePath || "");
+  return {
+    pageId: chunk.pageId,
+    documentId: String(chunk.documentId || ""),
+    versionId: String(chunk.metadata?.version_id || document?.version_id || ""),
+    pageNumber,
+    artifactPath: normalizeRelativePath(context.normalizedPath || ""),
+    textHash: chunk.textHash || "",
+    extractionState: "extracted",
+    qualityState: chunk.qualityState || "primary",
+    title,
+    relativePath,
+    sourceType: String(chunk.metadata?.sourceType || document?.sourceType || ""),
+    sourceUri: normalizeRelativePath(chunk.metadata?.sourceUri || document?.relativePath || relativePath),
+    metadata: {
+      title,
+      relativePath,
+      sourceType: chunk.metadata?.sourceType || document?.sourceType || "",
+      sourceUri: normalizeRelativePath(chunk.metadata?.sourceUri || document?.relativePath || relativePath),
+      source: chunk.metadata?.source || "cleaned-chunk",
+      characters: String(chunk.metadata?.text || chunk.metadata?.textPreview || "").length,
+      pageNumber,
+      pageClassification: chunk.metadata?.pageClassification || null
+    }
+  };
+}
+
 function cleanChunkBlock(chunk = {}, document = {}, index = 0, context = {}) {
   if (!chunk.chunk_id || !chunk.document_id) return null;
   const text = String(chunk.text || "");
@@ -811,6 +846,28 @@ function firstPresent(...values) {
     if (value !== undefined && value !== null && value !== "") return value;
   }
   return null;
+}
+
+function uniquePages(pages = []) {
+  const byId = new Map();
+  for (const page of pages) {
+    if (!page?.pageId) continue;
+    if (!byId.has(page.pageId)) {
+      byId.set(page.pageId, page);
+      continue;
+    }
+    const existing = byId.get(page.pageId);
+    byId.set(page.pageId, {
+      ...existing,
+      ...page,
+      metadata: {
+        ...(existing.metadata || {}),
+        ...(page.metadata || {})
+      },
+      qualityState: existing.qualityState === "review" || page.qualityState === "review" ? "review" : page.qualityState || existing.qualityState
+    });
+  }
+  return [...byId.values()];
 }
 
 function cleanQualityByDocument(chunks = []) {

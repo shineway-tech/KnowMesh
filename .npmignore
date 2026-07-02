@@ -11,12 +11,15 @@
 .tmp/
 node_modules/
 source/
+!examples/public-samples/**/source/
+!examples/public-samples/**/source/**
 workspace/
 knowledge-bases/
 artifacts/
 logs/
 tmp/
 output/
+exports/
 test-results/
 
 *.log

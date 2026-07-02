@@ -7,7 +7,7 @@ import Database from "better-sqlite3";
 
 import { createKnowledgeBase } from "./knowledge-bases.mjs";
 import { confirmTargetedRerunJob, latestJob } from "./jobs.mjs";
-import { catalogDatabasePath } from "./storage.mjs";
+import { catalogDatabasePath, knowledgeBaseDataRoot } from "./storage.mjs";
 import { filterScanForTargetedRerun, previewTargetedRerun } from "./targeted-rerun.mjs";
 
 test("targeted rerun preview scopes document page range unit and failed batch without leaking text", () => {
@@ -19,8 +19,9 @@ test("targeted rerun preview scopes document page range unit and failed batch wi
   const documentPreview = previewTargetedRerun(state, { type: "document", documentId: "doc-alpha" });
   const pagePreview = previewTargetedRerun(state, { type: "pageRange", documentId: "doc-alpha", startPage: 2, endPage: 3 });
   const unitPreview = previewTargetedRerun(state, { type: "unit", unit: "第三单元" });
+  const issuePreview = previewTargetedRerun(state, { type: "issue", issueId: "issue-doc-alpha" });
   const failedPreview = previewTargetedRerun(state, { type: "failedBatch" });
-  const serialized = `${JSON.stringify(documentPreview)}\n${JSON.stringify(pagePreview)}\n${JSON.stringify(unitPreview)}\n${JSON.stringify(failedPreview)}`;
+  const serialized = `${JSON.stringify(documentPreview)}\n${JSON.stringify(pagePreview)}\n${JSON.stringify(unitPreview)}\n${JSON.stringify(issuePreview)}\n${JSON.stringify(failedPreview)}`;
 
   assert.equal(documentPreview.ok, true);
   assert.equal(documentPreview.kind, "knowmesh.targetedRerunPreview");
@@ -47,6 +48,11 @@ test("targeted rerun preview scopes document page range unit and failed batch wi
   assert.equal(unitPreview.summary.structureNodes, 1);
   assert.equal(unitPreview.structureNodes[0].title, "第三单元");
   assert.equal(unitPreview.summary.pages, 2);
+  assert.equal(issuePreview.ok, true);
+  assert.equal(issuePreview.target.type, "issue");
+  assert.equal(issuePreview.summary.qualityIssues, 1);
+  assert.deepEqual(issuePreview.rerunScope.qualityIssueIds, ["issue-doc-alpha"]);
+  assert.deepEqual(issuePreview.rerunScope.documentIds, ["doc-alpha"]);
   assert.equal(failedPreview.summary.retryablePages, 1);
   assert.equal(failedPreview.summary.qualityIssues, 2);
   assert.equal(failedPreview.summary.evaluationFailures, 2);
@@ -57,6 +63,31 @@ test("targeted rerun preview scopes document page range unit and failed batch wi
   assert.doesNotMatch(serialized, /private expected answer/);
   assert.doesNotMatch(serialized, /private failure detail/);
   assert.doesNotMatch(serialized, /private query preview/);
+});
+
+test("targeted rerun preview includes dependency scope and user-fixable searchability diagnostics", () => {
+  const root = fs.mkdtempSync(path.join(os.tmpdir(), "knowmesh-targeted-rerun-diagnostics-"));
+  const state = { projectRoot: root, userDataRoot: path.join(root, "user-data"), enableSystemConverters: false };
+  const kb = createKnowledgeBase(state, { id: "kb-targeted-rerun-diagnostics", name: "Targeted Rerun Diagnostics", template: "general-docs" });
+  writeTargetedRerunFixture(state, kb.id);
+
+  const preview = previewTargetedRerun(state, { type: "document", documentId: "doc-alpha" });
+
+  assert.equal(preview.ok, true);
+  assert.equal(preview.diagnostics.summary.total, 3);
+  assert.deepEqual(preview.diagnostics.items.map((item) => item.key).sort(), [
+    "missingCitations",
+    "skippedExtraction",
+    "staleIndexRecords"
+  ]);
+  assert.equal(preview.diagnostics.items.every((item) => item.fixable === true), true);
+  assert.deepEqual(preview.rerunScope.chunkIds, ["chunk-alpha-1", "chunk-alpha-2"]);
+  assert.deepEqual(preview.rerunScope.citationIds, ["citation-alpha-1"]);
+  assert.deepEqual(preview.rerunScope.indexRecordIds, ["index-alpha-1", "index-alpha-2"]);
+  assert.equal(preview.rerunScope.rebuildPlan.catalogTables.includes("chunks"), true);
+  assert.equal(preview.rerunScope.rebuildPlan.catalogTables.includes("index_records"), true);
+  assert.equal(preview.rerunScope.rebuildPlan.catalogTables.includes("citations"), true);
+  assert.doesNotMatch(JSON.stringify(preview.diagnostics), /private page text/);
 });
 
 test("targeted rerun confirmation creates a scoped catalog job", () => {
@@ -75,11 +106,25 @@ test("targeted rerun confirmation creates a scoped catalog job", () => {
   assert.equal(result.job.targetedRerun.target.type, "pageRange");
   assert.equal(result.job.targetedRerun.summary.documents, 1);
   assert.equal(result.job.targetedRerun.summary.pages, 2);
+  assert.equal(result.job.summary.rerun.scope.type, "pageRange");
+  assert.deepEqual(result.job.summary.rerun.scope.documentIds, ["doc-alpha"]);
+  assert.deepEqual(result.job.summary.rerun.scope.pageRanges.map((item) => `${item.documentId}:${item.startPage}-${item.endPage}`), ["doc-alpha:2-3"]);
   assert.deepEqual(result.job.tasks.map((item) => item.key), ["scan", "pages", "clean", "embedding", "index", "report"]);
   assert.equal(latestJob(state).job.id, result.job.id);
   assert.equal(readCatalogScalar(state, kb.id, "SELECT job_id FROM jobs WHERE job_id = ?", [result.job.id]), result.job.id);
   assert.equal(readCatalogScalar(state, kb.id, "SELECT value FROM catalog_state WHERE key = 'latestJobId'"), result.job.id);
+  const persistedSummary = JSON.parse(readCatalogScalar(state, kb.id, "SELECT summary_json FROM jobs WHERE job_id = ?", [result.job.id]));
+  assert.deepEqual(persistedSummary.rerun.scope.documentIds, ["doc-alpha"]);
   assert.equal(readCatalogScalar(state, kb.id, "SELECT count(*) FROM task_steps WHERE job_id = ?", [result.job.id]), 6);
+  const checkpoint = JSON.parse(fs.readFileSync(path.join(
+    knowledgeBaseDataRoot(state, kb.id),
+    "artifacts",
+    "execution",
+    "jobs",
+    result.job.id,
+    "latest.checkpoint.json"
+  ), "utf8"));
+  assert.deepEqual(checkpoint.job.targetedRerun.scope.documentIds, ["doc-alpha"]);
   assert.doesNotMatch(JSON.stringify(result), /private page text/);
   assert.doesNotMatch(JSON.stringify(result), /private failure detail/);
 });
@@ -109,7 +154,7 @@ function writeTargetedRerunFixture(state, knowledgeBaseId) {
       `);
       pageInsert.run("page-alpha-1", "doc-alpha", "ver-alpha", 1, "pages/a1.json", "text-a1", "extracted", "primary", JSON.stringify({ sample: "private page text one" }), now, now);
       pageInsert.run("page-alpha-2", "doc-alpha", "ver-alpha", 2, "pages/a2.json", "text-a2", "retry", "review", JSON.stringify({ sample: "private page text retry", retry: { retryable: true } }), now, now);
-      pageInsert.run("page-alpha-3", "doc-alpha", "ver-alpha", 3, "pages/a3.json", "text-a3", "extracted", "primary", JSON.stringify({ sample: "private page text three" }), now, now);
+      pageInsert.run("page-alpha-3", "doc-alpha", "ver-alpha", 3, "pages/a3.json", "text-a3", "skipped", "review", JSON.stringify({ sample: "private page text three", reason: "parser skipped" }), now, now);
       pageInsert.run("page-beta-1", "doc-beta", "ver-beta", 1, "pages/b1.json", "text-b1", "extracted", "primary", "{}", now, now);
       db.prepare(`
         INSERT INTO structure_nodes (node_id, parent_id, document_id, node_type, title, sort_order, page_start, page_end, path, metadata_json, created_at, updated_at)
@@ -122,6 +167,16 @@ function writeTargetedRerunFixture(state, knowledgeBaseId) {
           ('chunk-alpha-2', 'doc-alpha', 'unit-alpha-3', 'chunk-hash-2', 39, 'review', '{}', ?, ?),
           ('chunk-beta-1', 'doc-beta', NULL, 'chunk-hash-3', 27, 'primary', '{}', ?, ?)
       `).run(now, now, now, now, now, now);
+      db.prepare(`
+        INSERT INTO citations (citation_id, chunk_id, document_id, page_id, structure_node_id, source_label, page_number, metadata_json, created_at, updated_at)
+        VALUES ('citation-alpha-1', 'chunk-alpha-1', 'doc-alpha', 'page-alpha-1', 'unit-alpha-3', '五年级语文上册', 1, '{}', ?, ?)
+      `).run(now, now);
+      db.prepare(`
+        INSERT INTO index_records (record_id, chunk_id, provider, index_name, status, vector_id, keyword_key, structure_key, metadata_json, created_at, updated_at)
+        VALUES
+          ('index-alpha-1', 'chunk-alpha-1', 'local-catalog', 'catalog', 'written', '', 'chunk-alpha-1', 'unit-alpha-3', '{}', ?, ?),
+          ('index-alpha-2', 'chunk-alpha-2', 'local-catalog', 'catalog', 'stale', '', 'chunk-alpha-2', 'unit-alpha-3', '{}', ?, ?)
+      `).run(now, now, now, now);
       db.prepare(`
         INSERT INTO quality_issues (issue_id, target_type, target_id, severity, status, reason, details_json, created_at, updated_at)
         VALUES

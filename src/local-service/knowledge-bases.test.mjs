@@ -53,7 +53,8 @@ test("catalog databases include the Knowledge Asset Layer foundation schema", ()
     "source_documents_fts",
     "structure_nodes_fts",
     "knowledge_objects_fts",
-    "query_feedback_fts"
+    "query_feedback_fts",
+    "chunks_fts"
   ];
   const expectedIndexes = [
     "idx_source_documents_status",
@@ -68,10 +69,14 @@ test("catalog databases include the Knowledge Asset Layer foundation schema", ()
     "idx_quality_issues_queue",
     "idx_document_overrides_status",
     "idx_artifact_registry_owner",
-    "idx_query_feedback_action_created"
+    "idx_query_feedback_action_created",
+    "idx_chunks_document_quality_updated",
+    "idx_chunks_structure_quality",
+    "idx_citations_document_page_search",
+    "idx_index_records_provider_index_status"
   ];
 
-  assert.equal(readCatalogScalar(state, created.id, "select version from schema_version where id = 1"), 4);
+  assert.equal(readCatalogScalar(state, created.id, "select version from schema_version where id = 1"), 5);
   assert.equal(
     readCatalogScalar(state, created.id, "select count(*) from migration_history where id = ?", ["002_catalog_asset_tables"]),
     1
@@ -82,6 +87,10 @@ test("catalog databases include the Knowledge Asset Layer foundation schema", ()
   );
   assert.equal(
     readCatalogScalar(state, created.id, "select count(*) from migration_history where id = ?", ["004_catalog_object_relations"]),
+    1
+  );
+  assert.equal(
+    readCatalogScalar(state, created.id, "select count(*) from migration_history where id = ?", ["005_catalog_chunk_search"]),
     1
   );
   for (const table of expectedTables) {
@@ -550,6 +559,45 @@ test("knowledge bases keep setup and jobs isolated", async () => {
   assert.equal(listKnowledgeBases(restarted).current.id, second.id);
   assert.equal(readSetupState(restarted).draft["project.source"], sourceB);
   assert.equal(latestJob(restarted).job.id, jobB.job.id);
+});
+
+test("scoped knowledge-base state owns jobs even when workspace current differs", async () => {
+  const temp = fs.mkdtempSync(path.join(os.tmpdir(), "knowmesh-kb-scoped-job-"));
+  const state = { projectRoot: temp, userDataRoot: path.join(temp, "user-data"), enableSystemConverters: false };
+  const sourceRoot = path.join(temp, "operator-source");
+  const workspaceRoot = path.join(temp, "operator-workspace");
+  fs.mkdirSync(sourceRoot, { recursive: true });
+  fs.mkdirSync(workspaceRoot, { recursive: true });
+  fs.writeFileSync(path.join(sourceRoot, "operator.txt"), "Operator scoped build source.", "utf8");
+
+  const operator = createKnowledgeBase(state, { name: "Operator KB", template: "general-docs" });
+  const k12 = createKnowledgeBase(state, { name: "K12 Gate KB", template: "textbook-cn-k12" });
+  assert.equal(listKnowledgeBases(state).current.id, k12.id);
+
+  const scoped = { ...state, knowledgeBaseId: operator.id };
+  assert.equal(listKnowledgeBases(scoped).current.id, operator.id);
+  saveSetupDraft(scoped, {
+    "project.template": "general-docs",
+    "project.source": sourceRoot,
+    "project.workspace": workspaceRoot
+  });
+  saveRetrievalStrategy(scoped, { "retrieval.profile": "balanced" });
+  const job = await confirmLocalJob(scoped, {
+    mode: "local",
+    template: "general-docs",
+    draft: {
+      "project.template": "general-docs",
+      "project.source": sourceRoot,
+      "project.workspace": workspaceRoot
+    }
+  });
+
+  assert.equal(job.ok, true, JSON.stringify(job.checks));
+  assert.equal(job.job.knowledgeBaseId, operator.id);
+  assert.equal(latestJob(scoped).job.id, job.job.id);
+  assert.equal(readCatalogScalar(scoped, operator.id, "select count(*) from jobs where job_id = ?", [job.job.id]), 1);
+  assert.equal(readCatalogScalar(scoped, k12.id, "select count(*) from jobs where job_id = ?", [job.job.id]), 0);
+  assert.equal(listKnowledgeBases(state).current.id, k12.id);
 });
 
 function readWorkspaceScalar(state, sql, params = []) {

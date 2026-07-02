@@ -140,6 +140,9 @@ function normalizeIndexRecord(record = {}, context = {}) {
   const indexName = String(context.indexName || target.index || target.indexName || record.index_name || record.indexName || "");
   const status = normalizeStatus(record.status || context.defaultStatus);
   const quality = record.quality || null;
+  const adapterMetadata = safeObject(record.adapter || metadata.adapter);
+  const sidecarMetadata = safeObject(record.sidecar || metadata.sidecar);
+  const sidecarUri = String(record.sidecarUri || metadata.sidecarUri || sidecarMetadata.uri || "");
   return {
     recordId: String(record.record_id || record.recordId || chunkId),
     chunkId,
@@ -187,7 +190,13 @@ function normalizeIndexRecord(record = {}, context = {}) {
       providerMessage: record.providerMessage || "",
       target,
       remoteId: record.remoteId || "",
-      sidecarUri: record.sidecarUri || "",
+      adapter: adapterMetadata,
+      sidecar: sidecarMetadata,
+      sidecarUri,
+      dimensions: record.dimensions ?? metadata.dimensions ?? sidecarMetadata.dimensions ?? null,
+      expectedDimensions: record.expectedDimensions ?? metadata.expectedDimensions ?? sidecarMetadata.expectedDimensions ?? null,
+      embeddingChecksum: record.embeddingChecksum || metadata.embeddingChecksum || "",
+      chunkTextHash: record.chunkTextHash || metadata.chunkTextHash || sidecarMetadata.chunkTextHash || "",
       retry: retryMetadata(context)
     }
   };
@@ -243,10 +252,20 @@ function retryMetadata(context = {}) {
   };
 }
 
-function normalizeStatus(status) {
+function safeObject(value) {
+  return value && typeof value === "object" && !Array.isArray(value) ? value : {};
+}
+
+export function normalizeIndexStatus(status) {
   const value = String(status || "").trim();
-  if (value === "written" || value === "failed" || value === "embedded" || value === "review") return value;
+  if (value === "success" || value === "indexed" || value === "complete") return "written";
+  if (value === "queued" || value === "running" || value === "uploading") return "pending";
+  if (value === "written" || value === "failed" || value === "embedded" || value === "review" || value === "pending" || value === "disabled" || value === "stale") return value;
   return value || "pending";
+}
+
+function normalizeStatus(status) {
+  return normalizeIndexStatus(status);
 }
 
 function sha256(value) {
