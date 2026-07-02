@@ -1,4 +1,5 @@
 import assert from "node:assert/strict";
+import { execFileSync } from "node:child_process";
 import fs from "node:fs";
 import path from "node:path";
 import test from "node:test";
@@ -12,6 +13,13 @@ function read(relativePath) {
 
 function exists(relativePath) {
   return fs.existsSync(path.join(projectRoot, relativePath));
+}
+
+function git(args) {
+  return execFileSync("git", ["-C", projectRoot, ...args], {
+    encoding: "utf8",
+    stdio: ["ignore", "pipe", "pipe"]
+  }).trim();
 }
 
 test("public README gives a complete launch-candidate story in Chinese and English", () => {
@@ -76,6 +84,30 @@ test("public sample and governance files are present and discoverable", () => {
     assert.match(content, /githubCodeql/);
     assert.match(content, /githubScorecard/);
     assert.match(content, /npmPublication.*separate-decision|npm 发布.*单独决策/i);
+  }
+});
+
+test("public sample source fixtures are tracked by git", (t) => {
+  try {
+    git(["rev-parse", "--is-inside-work-tree"]);
+  } catch {
+    t.skip("git metadata is not available");
+    return;
+  }
+
+  const requiredSourceFixtures = [
+    "examples/public-samples/general-docs/source/operations-handbook.md",
+    "examples/public-samples/operations-handbook/source/incident-operations-handbook.md",
+    "examples/public-samples/k12-synthetic/source/math-grade5-unit3.md"
+  ];
+
+  const gitignore = read(".gitignore");
+  assert.match(gitignore, /^!examples\/public-samples\/\*\*\/source\/$/m);
+  assert.match(gitignore, /^!examples\/public-samples\/\*\*\/source\/\*\*$/m);
+
+  for (const relativePath of requiredSourceFixtures) {
+    assert.equal(exists(relativePath), true, `${relativePath} should exist`);
+    assert.equal(git(["ls-files", "--error-unmatch", relativePath]), relativePath);
   }
 });
 

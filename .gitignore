@@ -8,6 +8,8 @@ node_modules/
 .superpowers/
 .runtime/
 source/
+!examples/public-samples/**/source/
+!examples/public-samples/**/source/**
 workspace/
 knowledge-bases/
 **/workspace/
